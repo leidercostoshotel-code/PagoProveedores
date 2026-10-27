@@ -10,12 +10,14 @@ import {
   createUserWithEmailAndPassword, EmailAuthProvider, reauthenticateWithCredential, updatePassword,
   setPersistence, browserSessionPersistence,
 } from "https://www.gstatic.com/firebasejs/10.14.1/firebase-auth.js";
-import { getFirestore } from "https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore.js";
+import { getFirestore, setLogLevel } from "https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore.js";
 import { getFunctions, httpsCallable } from "https://www.gstatic.com/firebasejs/10.14.1/firebase-functions.js";
 import { firebaseConfig, REGION_FUNCIONES, DOMINIO_PROVEEDORES } from "./config.js";
 
 export const app = initializeApp(firebaseConfig);
 export const db = getFirestore(app);
+// Sin mensajes internos del SDK en la consola (F12): los errores ya se muestran en pantalla.
+setLogLevel("silent");
 export const auth = getAuth(app);
 
 // La sesión se guarda solo mientras la pestaña está abierta (portal con

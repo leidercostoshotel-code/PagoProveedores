@@ -44,7 +44,7 @@ export function paginaServidor({ clave, etiqueta = "registros", barra, consulta,
         getDocs(query(c.col, ...c.filtros, ...c.orden, ...(cursor ? [startAfter(cursor)] : []), limit(st.tam))),
         recontar ? agregar(base, { total: count() }) : null,
         recontar && Object.keys(agregados).length
-          ? agregar(base, agregados).catch((err) => { console.warn("Portal: no se pudieron calcular las sumas", err); return null; })
+          ? agregar(base, agregados).catch(() => null)
           : null,
       ]);
       if (!st.vivo || n !== st.pedido) return;
