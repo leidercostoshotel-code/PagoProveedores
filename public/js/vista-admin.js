@@ -225,7 +225,7 @@ function vistaCargar(cont, ctx) {
     <div class="panel">
       <div class="panel-titulo"><div><h2>Cargar lotes de pagos</h2>
         <p>Sube <b>la carpeta completa</b> o varios TXT de Pago a Proveedores de Telecrédito BCP (y, si los tienes, los CSV de descuentos de SAP B1).
-        Los archivos ya cargados se reconocen solos —aunque cambies su nombre— y no se vuelven a cargar. Nada se guarda hasta que confirmes.</p></div></div>
+        <b>Se guarda solo</b>: los archivos nuevos o que cambiaron se cargan apenas los eliges; los ya cargados se reconocen —aunque cambies su nombre— y se omiten.</p></div></div>
       <div class="zona-archivo" id="zona">
         ${icono("subir")}<b>Arrastra aquí la carpeta o los archivos</b>
         <small>TXT del banco (obligatorio) · CSV de descuentos de SAP: factura;ruc;bruto;retencion;detraccion;notaCredito (opcional)</small>
@@ -301,6 +301,13 @@ function vistaCargar(cont, ctx) {
           x.estado = mismo ? "igual" : "cambio"; x.incluir = !mismo;
         }
       }));
+      // Un TXT sin facturas o sin fecha de abono no se guarda solo: queda para revisar (y cargarlo a mano si se quiere).
+      for (const x of lotes) {
+        if ((x.estado === "nuevo" || x.estado === "cambio") && (!x.r.pagos.length || !x.r.f)) {
+          x.estado = "revisar"; x.incluir = false;
+          x.detalle = !x.r.pagos.length ? "no tiene facturas (¿es el TXT de Pago a Proveedores?)" : "sin fecha de abono en la cabecera";
+        }
+      }
       const rucs = [...new Set(lotes.filter((x) => x.estado !== "repetido").flatMap((x) => x.r.pagos.map((p) => p.ruc)))];
       const cuentas = await rucsConCuenta(rucs).catch(() => new Set());
       vistaLotesPrevia(lotes, cuentas, csvs.length > 0);
@@ -315,18 +322,24 @@ function vistaCargar(cont, ctx) {
     cambio: `<span class="etiqueta-estado pendiente">Ya cargado · cambió</span>`,
     igual: `<span class="etiqueta-estado neutro">Ya cargado · se omite</span>`,
     repetido: `<span class="etiqueta-estado inactivo">Repetido · se omite</span>`,
+    revisar: `<span class="etiqueta-estado inactivo">Revisar · no se guardó</span>`,
+    guardando: `<span class="etiqueta-estado pendiente">Guardando…</span>`,
+    guardado: `<span class="etiqueta-estado activo">✓ Guardado</span>`,
+    error: `<span class="etiqueta-estado inactivo">Error · reintentar</span>`,
   };
 
   function vistaLotesPrevia(lotes, cuentas, hayCsv) {
     const caja = $("#vista-previa", cont);
     caja.innerHTML = `
       <div class="tarjetas" id="kpis-carga"></div>
+      <div id="estado-carga"></div>
       ${hayCsv ? "" : `<div class="aviso azul">No subiste CSV de descuentos: cada factura se guarda con el importe abonado como bruto (sin retención ni detracción).</div>`}
       <div class="panel">
-        <div class="panel-titulo"><div><h2>Archivos</h2><p>Marca los que quieres cargar. Toca un archivo para ver sus facturas.</p></div>
-          <div class="acciones"><button type="button" class="btn oscuro" id="confirmar">${icono("check")}Cargar</button></div></div>
+        <div class="panel-titulo"><div><h2>Archivos</h2><p>Toca un archivo para ver sus facturas. Los marcados "Revisar" puedes cargarlos a mano.</p></div>
+          <div class="acciones"><button type="button" class="btn oscuro" id="confirmar" hidden>${icono("check")}Cargar marcados</button>
+            <button type="button" class="btn chico" id="ver-lotes">${icono("capas")}Ver lotes</button></div></div>
         <div class="tabla-caja"><table>
-          <thead><tr><th><input type="checkbox" id="todos" title="Marcar todos los que se pueden cargar"></th><th>Archivo</th><th>Fecha de abono</th><th class="num">Facturas</th>
+          <thead><tr><th></th><th>Archivo</th><th>Fecha de abono</th><th class="num">Facturas</th>
             <th class="num">Proveedores</th><th class="num">Total</th><th>Avisos</th><th>Estado</th></tr></thead>
           <tbody id="tb-lotes"></tbody>
         </table></div>
@@ -334,27 +347,27 @@ function vistaCargar(cont, ctx) {
       </div>`;
     const pag = paginador("adm-carga", pintar, { etiqueta: "archivos" });
     pag.enganchar($("#pag-lotes", caja));
-    const cargables = lotes.filter((x) => x.estado === "nuevo" || x.estado === "cambio");
+    let trabajando = false;
     function resumen() {
-      const sel = lotes.filter((x) => x.incluir);
-      const facturas = sel.reduce((s, x) => s + x.r.pagos.length, 0);
-      const total = sel.reduce((s, x) => s + x.r.total, 0);
-      const sinCuenta = new Set(sel.flatMap((x) => x.r.pagos.map((p) => p.ruc)).filter((r) => !cuentas.has(r))).size;
-      const cuantos = (e) => lotes.filter((x) => x.estado === e).length;
+      const hechos = lotes.filter((x) => x.estado === "guardado");
+      const facturas = hechos.reduce((s, x) => s + x.r.pagos.length, 0);
+      const total = hechos.reduce((s, x) => s + x.r.total, 0);
+      const sinCuenta = new Set(hechos.flatMap((x) => x.r.pagos.map((p) => p.ruc)).filter((r) => !cuentas.has(r))).size;
+      const cuantos = (...e) => lotes.filter((x) => e.includes(x.estado)).length;
       $("#kpis-carga", caja).innerHTML = `
-        <div class="tarjeta destacada"><div class="etiqueta">Por cargar</div><div class="valor">${solesS(total)}</div><div class="sub">${sel.length} archivo(s) · ${facturas.toLocaleString("es-PE")} facturas</div></div>
-        <div class="tarjeta"><div class="etiqueta">Archivos nuevos</div><div class="valor">${cuantos("nuevo")}</div><div class="sub">${cuantos("cambio")} ya cargados con cambios</div></div>
-        <div class="tarjeta"><div class="etiqueta">Se omiten</div><div class="valor">${cuantos("igual") + cuantos("repetido")}</div><div class="sub">ya cargados o repetidos: no se duplican</div></div>
-        <div class="tarjeta"><div class="etiqueta">Sin cuenta en el portal</div><div class="valor">${sinCuenta}</div><div class="sub">proveedores de lo marcado</div></div>`;
-      $("#confirmar", caja).disabled = !sel.length;
-      $("#confirmar", caja).innerHTML = `${icono("check")}Cargar ${sel.length} archivo${sel.length === 1 ? "" : "s"}`;
-      $("#todos", caja).checked = cargables.length > 0 && cargables.every((x) => x.incluir);
+        <div class="tarjeta destacada"><div class="etiqueta">Guardado ahora</div><div class="valor">${solesS(total)}</div><div class="sub">${hechos.length} archivo(s) · ${facturas.toLocaleString("es-PE")} facturas</div></div>
+        <div class="tarjeta"><div class="etiqueta">Por guardar</div><div class="valor">${cuantos("nuevo", "cambio", "guardando", "error")}</div><div class="sub">nuevos o con cambios</div></div>
+        <div class="tarjeta"><div class="etiqueta">Se omiten</div><div class="valor">${cuantos("igual", "repetido")}</div><div class="sub">ya cargados o repetidos: no se duplican</div></div>
+        <div class="tarjeta"><div class="etiqueta">Sin cuenta en el portal</div><div class="valor">${sinCuenta}</div><div class="sub">proveedores de lo guardado</div></div>`;
+      const manual = lotes.filter((x) => x.incluir && (x.estado === "revisar" || x.estado === "error"));
+      $("#confirmar", caja).hidden = !manual.length || trabajando;
+      $("#confirmar", caja).innerHTML = `${icono("check")}Cargar ${manual.length} marcado${manual.length === 1 ? "" : "s"}`;
     }
     function pintar() {
       const { visibles, inicio, html } = pag.cortar(lotes);
       $("#pag-lotes", caja).innerHTML = html;
       $("#tb-lotes", caja).innerHTML = visibles.map((x, i) => {
-        const k = inicio + i, puede = x.estado === "nuevo" || x.estado === "cambio";
+        const k = inicio + i, puede = !trabajando && (x.estado === "revisar" || x.estado === "error");
         return `<tr class="clic" data-k="${k}">
           <td><input type="checkbox" data-incluir="${k}" ${x.incluir ? "checked" : ""} ${puede ? "" : "disabled"}></td>
           <td style="font-size:11.5px"><b>${esc(x.file.name)}</b><br><span class="mono" style="color:var(--gris);font-size:10px">${esc(x.r.lote)}</span></td>
@@ -367,7 +380,6 @@ function vistaCargar(cont, ctx) {
       resumen();
     }
     pintar();
-    $("#todos", caja).addEventListener("change", (e) => { cargables.forEach((x) => { x.incluir = e.target.checked; }); pintar(); });
     $("#tb-lotes", caja).addEventListener("change", (e) => {
       const c = e.target.closest("[data-incluir]");
       if (c) { lotes[Number(c.dataset.incluir)].incluir = c.checked; resumen(); }
@@ -378,31 +390,40 @@ function vistaCargar(cont, ctx) {
       if (tr) detalleLote(lotes[Number(tr.dataset.k)], cuentas);
     });
 
-    $("#confirmar", caja).addEventListener("click", async () => {
-      const sel = lotes.filter((x) => x.incluir);
-      const facturas = sel.reduce((s, x) => s + x.r.pagos.length, 0);
-      const ok = await confirmar({ titulo: "Confirmar carga", textoOk: "Cargar",
-        mensaje: `Se publicarán ${facturas.toLocaleString("es-PE")} facturas de ${sel.length} archivo(s) por ${solesS(sel.reduce((s, x) => s + x.r.total, 0))}. Los proveedores las verán de inmediato. Los pagos que ya estaban se actualizan, no se duplican.` });
-      if (!ok) return;
-      const btn = $("#confirmar", caja);
-      btn.disabled = true;
+    /** Guarda uno por uno los marcados (sin preguntar) y muestra el avance; si uno falla, para y deja reintentar. */
+    async function guardar(lista) {
+      if (!lista.length) {
+        $("#estado-carga", caja).innerHTML = `<div class="aviso azul">No hay archivos nuevos: todo lo de esta carpeta ya estaba cargado.</div>`;
+        return;
+      }
+      trabajando = true;
       let hechos = 0;
       try {
-        for (const x of sel) {
-          btn.textContent = `Archivo ${hechos + 1} de ${sel.length}…`;
+        for (const x of lista) {
+          $("#estado-carga", caja).innerHTML = `<div class="aviso amarillo"><b>Guardando automáticamente…</b> archivo ${hechos + 1} de ${lista.length}: ${esc(x.file.name)}. No cierres esta página.</div>`;
+          x.estado = "guardando"; pintar();
           await guardarLote(x, ctx);
-          x.estado = "igual"; x.incluir = false; x.detalle = "cargado ahora";
+          x.estado = "guardado"; x.incluir = false; x.detalle = "";
           hechos++;
+          pintar();
         }
-        notificar(`${hechos} archivo(s) cargados`);
-        ctx.irA("lotes");
+        const fact = lista.reduce((s, x) => s + x.r.pagos.length, 0);
+        $("#estado-carga", caja).innerHTML = `<div class="aviso azul" style="border-color:#A9D3C4;background:#E1F2EB;color:var(--verde)"><b>✓ Listo:</b> se guardaron ${hechos} archivo(s) con ${fact.toLocaleString("es-PE")} facturas. Los proveedores ya las ven.</div>`;
+        notificar(`${hechos} archivo(s) guardados`);
       } catch (err) {
         console.error("Portal: falló la carga", err);
+        const x = lista[hechos];
+        if (x) { x.estado = "error"; x.incluir = true; x.detalle = err.code || err.message; }
+        lista.slice(hechos + 1).forEach((y) => { y.estado = "error"; y.incluir = true; y.detalle = "no se llegó a guardar"; });
+        $("#estado-carga", caja).innerHTML = `<div class="aviso rojo">Se guardaron ${hechos} de ${lista.length}. Falló ${esc(x?.file.name || "")}: toca "Cargar marcados" para reintentar (no se duplica).</div>`;
+      } finally {
+        trabajando = false;
         pintar();
-        btn.disabled = false;
-        notificar(`Se cargaron ${hechos} de ${sel.length}. Falló ${sel[hechos]?.file.name || ""}: vuelve a intentar (no se duplica).`, "error");
       }
-    });
+    }
+    $("#confirmar", caja).addEventListener("click", () => guardar(lotes.filter((x) => x.incluir && (x.estado === "revisar" || x.estado === "error"))));
+    $("#ver-lotes", caja).addEventListener("click", () => ctx.irA("lotes"));
+    guardar(lotes.filter((x) => x.incluir && (x.estado === "nuevo" || x.estado === "cambio")));
   }
 
   /** Detalle de las facturas de un archivo (paginado), con "Crear cuenta" para quien no tiene. */

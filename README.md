@@ -100,7 +100,8 @@ Cloud Shell.
 ## Cargar los TXT del banco (la carpeta completa)
 
 Desde el panel: **Cargar lotes** → **Elegir carpeta** (o arrastra la carpeta). Toma todos los TXT (y los
-CSV de descuentos) de la carpeta. Cada vez que vuelvas a subirla, los archivos ya cargados se reconocen
+CSV de descuentos) de la carpeta y **los guarda solo**, sin botón (un TXT sin facturas o sin fecha queda
+en "Revisar" y no se guarda hasta que lo cargues a mano). Cada vez que vuelvas a subirla, los archivos ya cargados se reconocen
 solos —aunque les cambies el nombre— y se omiten: solo se cargan los nuevos. Los pagos nunca se
 duplican (cada uno se identifica por RUC + factura + fecha de abono). También sigue disponible por consola:
 ```

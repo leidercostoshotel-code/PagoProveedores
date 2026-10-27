@@ -47,6 +47,10 @@ TXT + CSV a la vez (los CSV se juntan en un solo mapa de descuentos). No se dupl
    se omite"; uno con el mismo id de lote pero otro contenido, "Ya cargado · cambió" (se actualiza); copias
    dentro de la misma selección, "Repetido". Solo se marcan para cargar los nuevos y los que cambiaron.
    Lotes viejos sin `hashTxt` se comparan por facturas + total.
+3. **Se guarda solo (pedido del dueño):** apenas se elige o se suelta la carpeta, los nuevos y los que
+   cambiaron se guardan sin botón ni confirmación (avance archivo por archivo; si uno falla, para y queda
+   "Cargar marcados" para reintentar). Un TXT sin facturas o sin fecha de abono NO se guarda solo:
+   queda "Revisar" y se puede marcar y cargar a mano.
 - `intentos_login/{email}`: solo Cloud Functions.
 
 ## Autenticación
