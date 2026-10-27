@@ -83,6 +83,20 @@ La configuración web la saca sola del proyecto (no hace falta pegar la apiKey).
 
 Desde ahí, todo lo demás (proveedores y usuarios) se crea desde el panel.
 
+## Importar los proveedores de SAP (miles de una vez)
+
+1. En SAP B1 exporta los Socios de negocios a Excel (el nombre va en la columna **C** y el RUC en la **Y**).
+2. Abre https://shell.cloud.google.com, menú **⋮ → Subir** y elige el Excel.
+3. Pega (con tu ID de proyecto y el nombre de tu archivo):
+   ```
+   bash <(curl -fsSL https://raw.githubusercontent.com/leidercostoshotel-code/PagoProveedores/main/scripts/importar-proveedores.sh) ID_PROYECTO ~/proveedores.xlsx
+   ```
+Muestra el resumen y pregunta antes de crear. Solo toma proveedores (clase S) no borrados con RUC válido,
+sin repetir el mismo RUC de las cuentas -S/-D; cada uno entra con **usuario = RUC y clave = su RUC**.
+Los inactivos en SAP quedan desactivados (agrega `--todos-activos` para activarlos todos). Se puede
+volver a correr con el Excel nuevo: solo crea los que faltan. Deja un informe CSV en tu carpeta de
+Cloud Shell.
+
 ## Cargar un lote de pagos
 
 Desde el panel: **Cargar lote**. También sigue disponible por consola:

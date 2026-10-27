@@ -7,11 +7,12 @@
 import { db, crearUsuario, restablecerClave } from "./firebase.js";
 import {
   collection, query, where, orderBy, limit, getDocs, getDoc, doc, setDoc, updateDoc,
-  writeBatch, serverTimestamp, onSnapshot,
+  writeBatch, serverTimestamp, onSnapshot, startAfter, getCountFromServer,
 } from "https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore.js";
 import {
   $, esc, icono, soles, solesS, fechaCorta, fechaHora, normalizar, toISO, hoyISO,
   abrirModal, confirmar, notificar, descargarCSV, generarClave, validarClaveNueva, ERRORES_ALTA,
+  paginador, htmlPagina, leerTam, guardarTam,
 } from "./util.js";
 import { ROLES_INTERNOS, etiquetaRol, puedeGestionar } from "./roles.js";
 import { leerArchivo, interpretarLote } from "./bcp.js";
@@ -119,10 +120,13 @@ function vistaPagos(cont, ctx) {
           <th class="num">Retención</th><th class="num">Detracción</th><th class="num">N. crédito</th><th class="num">Neto</th><th>Lote</th></tr></thead>
         <tbody id="tb"><tr><td colspan="11" class="vacio">Cargando…</td></tr></tbody><tfoot id="tf"></tfoot>
       </table></div>
+      <div id="pag"></div>
     </div>`;
 
   let filas = [];
   let vivo = true;
+  const pag = paginador("adm-pagos", () => pintar(), { etiqueta: "facturas" });
+  pag.enganchar($("#pag", cont));
   async function buscar() {
     const texto = $("#f-buscar", cont).value.trim();
     const desde = $("#f-desde", cont).value, hasta = $("#f-hasta", cont).value;
@@ -150,6 +154,7 @@ function vistaPagos(cont, ctx) {
         .filter((x) => !filtroLocal || [x.ruc, x.razonSocial, x.factura, x.lote].some((v) => normalizar(v).includes(filtroLocal)))
         .sort((a, b) => (b.fechaPago || "").localeCompare(a.fechaPago || "") || (a.razonSocial || "").localeCompare(b.razonSocial || ""));
       $("#descripcion", cont).textContent = desc;
+      pag.reiniciar();
       pintar();
     } catch (err) {
       console.error("Portal: no se pudieron leer los pagos", err);
@@ -163,8 +168,10 @@ function vistaPagos(cont, ctx) {
       <div class="tarjeta"><div class="etiqueta">Facturas</div><div class="valor">${filas.length}</div><div class="sub">${provs} proveedor${provs === 1 ? "" : "es"}</div></div>
       <div class="tarjeta"><div class="etiqueta">Retenciones</div><div class="valor">${soles(sumar(filas, "retencion"))}</div><div class="sub">Detracciones: ${soles(sumar(filas, "detraccion"))}</div></div>
       <div class="tarjeta"><div class="etiqueta">Notas de crédito</div><div class="valor">${soles(sumar(filas, "notaCredito"))}</div><div class="sub">Bruto: ${soles(sumar(filas, "bruto"))}</div></div>`;
-    $("#tb", cont).innerHTML = filas.map((x, i) => `
-      <tr class="clic" data-i="${i}">
+    const { visibles, inicio, html } = pag.cortar(filas);
+    $("#pag", cont).innerHTML = html;
+    $("#tb", cont).innerHTML = visibles.map((x, i) => `
+      <tr class="clic" data-i="${inicio + i}">
         <td>${fechaCorta(x.fechaPago)}</td><td class="mono">${esc(x.ruc)}</td><td>${esc(x.razonSocial)}</td><td class="mono">${esc(x.factura)}</td><td>${esc(x.banco)}</td>
         <td class="num">${soles(x.bruto)}</td><td class="num descuento">${x.retencion ? soles(x.retencion) : "—"}</td>
         <td class="num descuento">${x.detraccion ? soles(x.detraccion) : "—"}</td><td class="num descuento">${x.notaCredito ? soles(x.notaCredito) : "—"}</td>
@@ -222,7 +229,7 @@ function vistaCargar(cont, ctx) {
       const r = interpretarLote(txt, archivos.txt.name, csv);
       const [loteExiste, cuentas] = await Promise.all([
         getDoc(doc(db, "lotes", r.lote)).then((s) => s.exists()).catch(() => false),
-        getDocs(query(collection(db, "usuarios"), where("rol", "==", "proveedor"))).then((s) => new Set(s.docs.map((d) => d.data().ruc))).catch(() => new Set()),
+        rucsConCuenta([...new Set(r.pagos.map((x) => x.ruc))]).catch(() => new Set()),
       ]);
       vistaPrevia(r, loteExiste, cuentas, archivos);
     } catch (err) {
@@ -249,18 +256,29 @@ function vistaCargar(cont, ctx) {
         <div class="tabla-caja"><table>
           <thead><tr><th>RUC</th><th>Razón social</th><th>Factura</th><th>Cuenta abono</th><th class="num">Bruto</th><th class="num">Retención</th>
             <th class="num">Detracción</th><th class="num">N. crédito</th><th class="num">Neto</th><th>Portal</th></tr></thead>
-          <tbody>${r.pagos.map((x) => `<tr>
-            <td class="mono">${esc(x.ruc)}</td><td>${esc(x.razonSocial)}</td><td class="mono">${esc(x.factura)}</td><td class="mono">${esc(x.cuentaAbono)}</td>
-            <td class="num">${soles(x.bruto)}</td><td class="num">${soles(x.retencion)}</td><td class="num">${soles(x.detraccion)}</td>
-            <td class="num">${soles(x.notaCredito)}</td><td class="num neto">${soles(x.neto)}</td>
-            <td>${cuentas.has(x.ruc) ? `<span class="etiqueta-estado activo">Con cuenta</span>`
-              : `<button type="button" class="btn chico" data-crear="${esc(x.ruc)}" data-razon="${esc(x.razonSocial)}">${icono("mas")}Crear cuenta</button>`}</td>
-          </tr>`).join("") || `<tr><td colspan="10" class="vacio">El archivo no tiene pagos.</td></tr>`}</tbody>
-          <tfoot><tr><td colspan="8">Total</td><td class="num">${soles(r.total)}</td><td></td></tr></tfoot>
+          <tbody id="tb-previa"></tbody>
+          <tfoot><tr><td colspan="8">Total (${r.pagos.length})</td><td class="num">${soles(r.total)}</td><td></td></tr></tfoot>
         </table></div>
+        <div id="pag-previa"></div>
       </div>`;
-    caja.querySelectorAll("[data-crear]").forEach((b) => b.addEventListener("click", () =>
-      modalProveedor(ctx, { ruc: b.dataset.crear, razonSocial: b.dataset.razon }, () => { b.outerHTML = `<span class="etiqueta-estado activo">Con cuenta</span>`; })));
+    const pag = paginador("adm-previa", pintarPrevia, { etiqueta: "facturas" });
+    pag.enganchar($("#pag-previa", caja));
+    function pintarPrevia() {
+      const { visibles, html } = pag.cortar(r.pagos);
+      $("#pag-previa", caja).innerHTML = html;
+      $("#tb-previa", caja).innerHTML = visibles.map((x) => `<tr>
+        <td class="mono">${esc(x.ruc)}</td><td>${esc(x.razonSocial)}</td><td class="mono">${esc(x.factura)}</td><td class="mono">${esc(x.cuentaAbono)}</td>
+        <td class="num">${soles(x.bruto)}</td><td class="num">${soles(x.retencion)}</td><td class="num">${soles(x.detraccion)}</td>
+        <td class="num">${soles(x.notaCredito)}</td><td class="num neto">${soles(x.neto)}</td>
+        <td>${cuentas.has(x.ruc) ? `<span class="etiqueta-estado activo">Con cuenta</span>`
+          : `<button type="button" class="btn chico" data-crear="${esc(x.ruc)}" data-razon="${esc(x.razonSocial)}">${icono("mas")}Crear cuenta</button>`}</td>
+      </tr>`).join("") || `<tr><td colspan="10" class="vacio">El archivo no tiene pagos.</td></tr>`;
+    }
+    pintarPrevia();
+    $("#tb-previa", caja).addEventListener("click", (e) => {
+      const b = e.target.closest("[data-crear]");
+      if (b) modalProveedor(ctx, { ruc: b.dataset.crear, razonSocial: b.dataset.razon }, () => { cuentas.add(b.dataset.crear); pintarPrevia(); });
+    });
 
     $("#confirmar", caja).addEventListener("click", async () => {
       const ok = await confirmar({ titulo: "Confirmar carga", textoOk: "Cargar lote",
@@ -293,6 +311,15 @@ function vistaCargar(cont, ctx) {
     });
   }
 }
+/** RUC (de la lista dada) que ya tienen cuenta de proveedor: lee solo esos, de 30 en 30. */
+async function rucsConCuenta(rucs) {
+  const con = new Set();
+  for (let i = 0; i < rucs.length; i += 30) {
+    const snap = await getDocs(query(collection(db, "usuarios"), where("rol", "==", "proveedor"), where("ruc", "in", rucs.slice(i, i + 30))));
+    snap.docs.forEach((d) => con.add(d.data().ruc));
+  }
+  return con;
+}
 const zona = (tipo, titulo, ayuda, accept) => `
   <label class="zona-archivo" id="zona-${tipo}">
     ${icono("subir")}<b>${titulo}</b><small>${ayuda}</small><small>Arrastra el archivo aquí o haz clic para elegirlo</small>
@@ -313,9 +340,20 @@ function vistaLotes(cont, ctx) {
           <th class="num">Total</th><th>Archivos</th><th>Cargado por</th><th></th></tr></thead>
         <tbody id="tb"><tr><td colspan="9" class="vacio">Cargando…</td></tr></tbody>
       </table></div>
+      <div id="pag"></div>
     </div>`;
+  let docs = null;
+  const pag = paginador("adm-lotes", () => pintar(), { etiqueta: "lotes" });
+  pag.enganchar($("#pag", cont));
   const soltar = onSnapshot(query(collection(db, "lotes"), orderBy("cargadoEn", "desc"), limit(100)), (snap) => {
-    $("#tb", cont).innerHTML = snap.docs.map((d) => { const l = d.data(); return `<tr>
+    docs = snap.docs;
+    pintar();
+  }, (err) => { $("#tb", cont).innerHTML = `<tr><td colspan="9" class="vacio">No se pudieron leer los lotes (${esc(err.code)}).</td></tr>`; });
+  function pintar() {
+    if (!docs) return;
+    const { visibles, html } = pag.cortar(docs);
+    $("#pag", cont).innerHTML = html;
+    $("#tb", cont).innerHTML = visibles.map((d) => { const l = d.data(); return `<tr>
       <td class="mono">${esc(d.id)}</td><td>${fechaCorta(l.fechaPago)}</td><td>${esc(l.banco)}</td>
       <td class="num">${l.facturas ?? "—"}</td><td class="num">${l.proveedores ?? "—"}</td><td class="num neto">${soles(l.total)}</td>
       <td style="font-size:11px">${esc(l.archivoTxt || "")}${l.archivoCsv ? `<br>${esc(l.archivoCsv)}` : ""}</td>
@@ -323,7 +361,7 @@ function vistaLotes(cont, ctx) {
       <td><div class="acciones"><button type="button" class="btn chico" data-ver="${esc(d.id)}">${icono("recibo")}Ver pagos</button>
         ${gestiona ? `<button type="button" class="btn chico rojo" data-borrar="${esc(d.id)}" data-n="${l.facturas || 0}">${icono("basura")}Eliminar</button>` : ""}</div></td>
     </tr>`; }).join("") || `<tr><td colspan="9" class="vacio">Aún no se ha cargado ningún lote.</td></tr>`;
-  }, (err) => { $("#tb", cont).innerHTML = `<tr><td colspan="9" class="vacio">No se pudieron leer los lotes (${esc(err.code)}).</td></tr>`; });
+  }
 
   $("#tb", cont).addEventListener("click", async (e) => {
     const ver = e.target.closest("[data-ver]"), borrar = e.target.closest("[data-borrar]");
@@ -365,7 +403,7 @@ function vistaProveedores(cont, ctx) {
           <button type="button" class="btn chico" id="exportar">${icono("bajar")}CSV</button></div>
       </div>
       <div class="barra-filtros">
-        <label class="campo crece"><span>Buscar</span><input class="input chico" style="width:100%" id="f-buscar" placeholder="RUC, razón social o contacto"></label>
+        <label class="campo crece"><span>Buscar</span><input class="input chico" style="width:100%" id="f-buscar" placeholder="RUC o razón social (cómo empieza)" autocomplete="off"></label>
         <label class="campo"><span>Estado</span><select class="select chico" id="f-estado">
           <option value="">Todos</option><option value="activo">Activos</option><option value="inactivo">Inactivos</option></select></label>
       </div>
@@ -373,54 +411,110 @@ function vistaProveedores(cont, ctx) {
         <thead><tr><th>RUC</th><th>Razón social</th><th>Contacto</th><th>Estado</th><th>Último ingreso</th><th>Alta</th><th></th></tr></thead>
         <tbody id="tb"><tr><td colspan="7" class="vacio">Cargando…</td></tr></tbody>
       </table></div>
+      <div id="pag"></div>
     </div>`;
-  let lista = [];
+
+  /* Paginación en el servidor: con miles de proveedores (importados de SAP) se
+     lee solo la página visible (orderBy + limit + startAfter) y el total con
+     una consulta de conteo, nunca la colección entera. */
+  const st = { pagina: 1, tam: leerTam("adm-proveedores") || 25, cursores: [null], total: 0, lista: [], vivo: true, pedido: 0 };
+  function filtros() {
+    const t = $("#f-buscar", cont).value.trim(), est = $("#f-estado", cont).value;
+    const conds = [where("rol", "==", "proveedor")];
+    if (est) conds.push(where("activo", "==", est === "activo"));
+    let campo = "razonSocial";
+    if (/^\d+$/.test(t)) { campo = "ruc"; conds.push(where("ruc", ">=", t), where("ruc", "<=", `${t}`)); }
+    else if (t) { const T = t.toUpperCase(); conds.push(where("razonSocial", ">=", T), where("razonSocial", "<=", `${T}`)); }
+    return { conds, campo };
+  }
+  async function cargar(reiniciar, recontar = reiniciar) {
+    const n = ++st.pedido;
+    if (reiniciar) { st.pagina = 1; st.cursores = [null]; }
+    const { conds, campo } = filtros();
+    const col = collection(db, "usuarios");
+    const cursor = st.cursores[st.pagina - 1];
+    $("#tb", cont).innerHTML = `<tr><td colspan="7" class="vacio">Cargando…</td></tr>`;
+    try {
+      const [snap, cuenta] = await Promise.all([
+        getDocs(query(col, ...conds, orderBy(campo), ...(cursor ? [startAfter(cursor)] : []), limit(st.tam))),
+        recontar ? getCountFromServer(query(col, ...conds)) : null,
+      ]);
+      if (!st.vivo || n !== st.pedido) return;
+      if (cuenta) st.total = cuenta.data().count;
+      st.lista = snap.docs.map((d) => ({ uid: d.id, ...d.data() }));
+      st.cursores[st.pagina] = snap.docs[snap.docs.length - 1] || null;
+      pintar();
+    } catch (err) {
+      console.error("Portal: no se pudieron leer los proveedores", err);
+      if (n === st.pedido) $("#tb", cont).innerHTML = `<tr><td colspan="7" class="vacio">No se pudieron leer los proveedores (${esc(err.code || err.message)}).</td></tr>`;
+    }
+  }
   function pintar() {
-    const t = normalizar($("#f-buscar", cont).value), est = $("#f-estado", cont).value;
-    const filas = lista.filter((u) => (!t || [u.ruc, u.razonSocial, u.contacto, u.telefono].some((v) => normalizar(v).includes(t)))
-      && (!est || (est === "activo" ? u.activo : !u.activo)));
-    $("#tb", cont).innerHTML = filas.map((u) => `<tr>
+    const paginas = Math.max(1, Math.ceil(st.total / st.tam));
+    const desde = st.total ? (st.pagina - 1) * st.tam + 1 : 0;
+    $("#pag", cont).innerHTML = htmlPagina({ pagina: st.pagina, paginas, total: st.total, desde, hasta: Math.min(desde + st.lista.length - 1, st.total), tam: st.tam, saltos: false, etiqueta: "proveedores" });
+    $("#tb", cont).innerHTML = st.lista.map((u) => `<tr>
       <td class="mono">${esc(u.ruc)}</td><td>${esc(u.razonSocial)}</td>
       <td style="font-size:11px">${esc(u.contacto || "—")}${u.telefono ? `<br>${esc(u.telefono)}` : ""}</td>
       <td>${estadoUsuario(u)}</td><td style="font-size:11px">${fechaHora(u.ultimoIngreso)}</td><td style="font-size:11px">${fechaHora(u.creadoEn)}</td>
       <td><div class="acciones">
-        <button type="button" class="btn chico" data-acc="pagos" data-uid="${u.uid}">${icono("recibo")}Pagos</button>
-        ${gestiona ? `<button type="button" class="btn chico" data-acc="editar" data-uid="${u.uid}">Editar</button>
-          <button type="button" class="btn chico" data-acc="clave" data-uid="${u.uid}">${icono("llave")}Clave</button>
-          <button type="button" class="btn chico ${u.activo ? "rojo" : "verde"}" data-acc="activo" data-uid="${u.uid}">${u.activo ? "Desactivar" : "Activar"}</button>` : ""}
-      </div></td></tr>`).join("") || `<tr><td colspan="7" class="vacio">${lista.length ? "Ningún proveedor coincide." : "Aún no hay proveedores con acceso."}</td></tr>`;
+        <button type="button" class="btn chico" data-acc="pagos" data-uid="${esc(u.uid)}">${icono("recibo")}Pagos</button>
+        ${gestiona ? `<button type="button" class="btn chico" data-acc="editar" data-uid="${esc(u.uid)}">Editar</button>
+          <button type="button" class="btn chico" data-acc="clave" data-uid="${esc(u.uid)}">${icono("llave")}Clave</button>
+          <button type="button" class="btn chico ${u.activo ? "rojo" : "verde"}" data-acc="activo" data-uid="${esc(u.uid)}">${u.activo ? "Desactivar" : "Activar"}</button>` : ""}
+      </div></td></tr>`).join("") || `<tr><td colspan="7" class="vacio">${$("#f-buscar", cont).value || $("#f-estado", cont).value ? "Ningún proveedor coincide." : "Aún no hay proveedores con acceso."}</td></tr>`;
   }
-  const soltar = onSnapshot(query(collection(db, "usuarios"), where("rol", "==", "proveedor")), (snap) => {
-    lista = snap.docs.map((d) => ({ uid: d.id, ...d.data() })).sort((a, b) => (a.razonSocial || "").localeCompare(b.razonSocial || ""));
-    pintar();
-  }, (err) => { $("#tb", cont).innerHTML = `<tr><td colspan="7" class="vacio">No se pudieron leer los proveedores (${esc(err.code)}).</td></tr>`; });
 
-  $("#f-buscar", cont).addEventListener("input", pintar);
-  $("#f-estado", cont).addEventListener("change", pintar);
-  $("#nuevo", cont)?.addEventListener("click", () => modalProveedor(ctx));
-  $("#exportar", cont).addEventListener("click", () => descargarCSV(`proveedores_${hoyISO()}.csv`,
-    ["RUC", "Razón social", "Contacto", "Teléfono", "Activo", "Último ingreso"],
-    lista.map((u) => [u.ruc, u.razonSocial, u.contacto, u.telefono, u.activo ? "Sí" : "No", fechaHora(u.ultimoIngreso)])));
+  let espera = 0;
+  $("#f-buscar", cont).addEventListener("input", () => { clearTimeout(espera); espera = setTimeout(() => cargar(true), 400); });
+  $("#f-estado", cont).addEventListener("change", () => cargar(true));
+  $("#pag", cont).addEventListener("click", (e) => {
+    const b = e.target.closest("[data-pag]");
+    if (!b || b.disabled) return;
+    st.pagina += b.dataset.pag === "siguiente" ? 1 : -1;
+    cargar(false);
+  });
+  $("#pag", cont).addEventListener("change", (e) => {
+    if (!e.target.matches("[data-tam]")) return;
+    st.tam = Number(e.target.value);
+    guardarTam("adm-proveedores", st.tam);
+    cargar(true);
+  });
+  $("#nuevo", cont)?.addEventListener("click", () => modalProveedor(ctx, {}, () => cargar(true)));
+  $("#exportar", cont).addEventListener("click", async () => {
+    if (st.total > 500 && !(await confirmar({ titulo: "Descargar proveedores", textoOk: "Descargar",
+      mensaje: `Se descargarán los ${st.total.toLocaleString("es-PE")} proveedores de este filtro (puede tardar unos segundos).` }))) return;
+    try {
+      const { conds, campo } = filtros();
+      const snap = await getDocs(query(collection(db, "usuarios"), ...conds, orderBy(campo)));
+      descargarCSV(`proveedores_${hoyISO()}.csv`, ["RUC", "Razón social", "Contacto", "Teléfono", "Activo", "Último ingreso"],
+        snap.docs.map((d) => { const u = d.data(); return [u.ruc, u.razonSocial, u.contacto, u.telefono, u.activo ? "Sí" : "No", fechaHora(u.ultimoIngreso)]; }));
+    } catch (err) {
+      console.error("Portal: no se pudo descargar", err);
+      notificar("No se pudo descargar", "error");
+    }
+  });
   $("#tb", cont).addEventListener("click", async (e) => {
     const b = e.target.closest("[data-acc]");
     if (!b) return;
-    const u = lista.find((x) => x.uid === b.dataset.uid);
+    const u = st.lista.find((x) => x.uid === b.dataset.uid);
     if (b.dataset.acc === "pagos") ctx.irA("pagos", { ruc: u.ruc });
-    if (b.dataset.acc === "editar") modalProveedor(ctx, u);
+    if (b.dataset.acc === "editar") modalProveedor(ctx, u, null, () => cargar(false, true));
     if (b.dataset.acc === "clave") modalRestablecer(u);
     if (b.dataset.acc === "activo") {
       const ok = await confirmar({ titulo: u.activo ? "Desactivar proveedor" : "Activar proveedor", peligroso: u.activo,
         textoOk: u.activo ? "Desactivar" : "Activar",
         mensaje: u.activo ? `${u.razonSocial} (RUC ${u.ruc}) ya no podrá consultar sus pagos.` : `${u.razonSocial} (RUC ${u.ruc}) podrá volver a consultar sus pagos.` });
       if (ok) updateDoc(doc(db, "usuarios", u.uid), { activo: !u.activo, actualizadoPor: quien(ctx), actualizadoEn: serverTimestamp() })
-        .then(() => notificar(u.activo ? "Proveedor desactivado" : "Proveedor activado"), () => notificar("No se pudo actualizar", "error"));
+        .then(() => { notificar(u.activo ? "Proveedor desactivado" : "Proveedor activado"); cargar(false, true); }, () => notificar("No se pudo actualizar", "error"));
     }
   });
-  return soltar;
+  cargar(true);
+  return () => { st.vivo = false; clearTimeout(espera); };
 }
 
-/** Alta (sin uid) o edición (con uid) de un proveedor. `alCrear` se llama tras un alta exitosa. */
-function modalProveedor(ctx, u = {}, alCrear) {
+/** Alta (sin uid) o edición (con uid) de un proveedor. `alCrear` / `alEditar` se llaman al guardar. */
+function modalProveedor(ctx, u = {}, alCrear, alEditar) {
   const edicion = !!u.uid;
   const { el, cerrar } = abrirModal(`
     <form novalidate>
@@ -461,6 +555,7 @@ function modalProveedor(ctx, u = {}, alCrear) {
         await updateDoc(doc(db, "usuarios", u.uid), { razonSocial: razon, nombre: razon, contacto, telefono, actualizadoPor: quien(ctx), actualizadoEn: serverTimestamp() });
         notificar("Proveedor actualizado");
         cerrar();
+        if (alEditar) alEditar();
         return;
       }
       const claveIni = $("#p-clave", el).value.trim();
@@ -497,12 +592,21 @@ function vistaUsuarios(cont, ctx) {
         <thead><tr><th>Nombre</th><th>Correo</th><th>Rol</th><th>Estado</th><th>Último ingreso</th><th></th></tr></thead>
         <tbody id="tb"><tr><td colspan="6" class="vacio">Cargando…</td></tr></tbody>
       </table></div>
+      <div id="pag"></div>
       <div class="aviso azul" style="margin:12px 0 0">${ROLES_INTERNOS.map((r) => `<div><b>${r.etiqueta}:</b> ${r.detalle}</div>`).join("")}</div>
     </div>`;
-  let lista = [];
+  let lista = null;
+  const pag = paginador("adm-usuarios", () => pintar(), { etiqueta: "usuarios" });
+  pag.enganchar($("#pag", cont));
   const soltar = onSnapshot(query(collection(db, "usuarios"), where("rol", "in", ROLES_INTERNOS.map((r) => r.id))), (snap) => {
     lista = snap.docs.map((d) => ({ uid: d.id, ...d.data() })).sort((a, b) => (a.nombre || "").localeCompare(b.nombre || ""));
-    $("#tb", cont).innerHTML = lista.map((u) => {
+    pintar();
+  }, (err) => { $("#tb", cont).innerHTML = `<tr><td colspan="6" class="vacio">No se pudieron leer los usuarios (${esc(err.code)}).</td></tr>`; });
+  function pintar() {
+    if (!lista) return;
+    const { visibles, html } = pag.cortar(lista);
+    $("#pag", cont).innerHTML = html;
+    $("#tb", cont).innerHTML = visibles.map((u) => {
       const yo = u.uid === ctx.user.uid;
       return `<tr>
         <td>${esc(u.nombre)}${yo ? ` <span class="etiqueta-estado neutro">Tú</span>` : ""}</td><td>${esc(u.email)}</td>
@@ -512,7 +616,7 @@ function vistaUsuarios(cont, ctx) {
         <td>${yo ? "" : `<div class="acciones"><button type="button" class="btn chico" data-acc="clave" data-uid="${u.uid}">${icono("llave")}Clave</button>
           <button type="button" class="btn chico ${u.activo ? "rojo" : "verde"}" data-acc="activo" data-uid="${u.uid}">${u.activo ? "Desactivar" : "Activar"}</button></div>`}</td>
       </tr>`; }).join("") || `<tr><td colspan="6" class="vacio">Sin usuarios.</td></tr>`;
-  }, (err) => { $("#tb", cont).innerHTML = `<tr><td colspan="6" class="vacio">No se pudieron leer los usuarios (${esc(err.code)}).</td></tr>`; });
+  }
 
   $("#tb", cont).addEventListener("change", (e) => {
     const s = e.target.closest("[data-rol]");

@@ -22,6 +22,11 @@ del hotel administra todo desde el mismo portal. Login y estilo copiados de la s
   `npm install && npm run probar:reglas` (emulador, necesita Java). **Correrlas tras tocar `firestore.rules`.**
 - `firebase.json` — cabeceras de seguridad (CSP: scripts solo propios y de gstatic, datos solo a Google;
   sin iframes ajenos; HSTS). Un script o servicio externo nuevo hay que sumarlo a la CSP.
+- `scripts/importar-proveedores.sh` + `scripts/importar-proveedores-sap.mjs` — importa el Excel de SAP
+  (Socios de negocios: C nombre, Y RUC, D clase, EV activo, FX borrado, BF correo, K teléfono) desde Cloud
+  Shell: crea cuenta `prov-<RUC>` (clave = RUC) y perfil, solo proveedores (clase S) nuevos con RUC válido;
+  activo = activo en SAP. Desde el navegador NO se pueden crear miles (Firebase limita ~100 altas/hora
+  por IP), por eso va por el API de administrador con `gcloud auth print-access-token`. Re-ejecutable.
 - `scripts/desplegar-cloudshell.sh` — despliegue desde Google Cloud Shell (una línea; nunca con `leitime`).
 - `.github/workflows/firebase-deploy.yml` — despliega Hosting, Firestore y Functions con secrets `FIREBASE_*`.
 
@@ -51,6 +56,15 @@ admin se crea a mano en la consola (ver README).
 - Al terminar, darle al dueño el comando de Cloud Shell para publicar:
   `bash <(curl -fsSL https://raw.githubusercontent.com/leidercostoshotel-code/PagoProveedores/main/scripts/desplegar-cloudshell.sh) ID_PROYECTO [hosting reglas functions]`
   (GitHub Actions falla mientras la cuenta de servicio no tenga los roles; ver el workflow).
+
+## Paginación obligatoria (pedido del dueño)
+**Toda lista del portal va paginada** (25/50/100 por página, se recuerda por lista): `paginador()` y
+`htmlPagina()` en util.js para listas ya cargadas (Pagos, Lotes, Usuarios, vista previa del lote, Mis
+pagos, Resumen por mes). **Proveedores pagina en el servidor** (puede haber miles): `orderBy` + `limit`
++ `startAfter` y el total con `getCountFromServer`; búsqueda por cómo empieza el RUC o la razón social
+(en MAYÚSCULAS). Usa los índices de `firestore.indexes.json` (rol + razonSocial/ruc, con y sin activo).
+Nunca leer la colección `usuarios` entera desde el panel (la vista previa del lote consulta solo los
+RUC del lote, de 30 en 30). Una tabla nueva lleva su paginador desde el día uno.
 
 ## Convenciones
 - Código y comentarios en español. Sin frameworks en el frontend (HTML + CSS + JS módulos).
