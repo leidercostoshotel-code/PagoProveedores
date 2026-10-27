@@ -103,14 +103,10 @@ Desde el panel: **Cargar lotes** → **Elegir carpeta** (o arrastra la carpeta).
 CSV de descuentos) de la carpeta y **los guarda solo**, sin botón (un TXT sin facturas o sin fecha queda
 en "Revisar" y no se guarda hasta que lo cargues a mano). Cada vez que vuelvas a subirla, los archivos ya cargados se reconocen
 solos —aunque les cambies el nombre— y se omiten: solo se cargan los nuevos. Los pagos nunca se
-duplican (cada uno se identifica por RUC + factura + fecha de abono). También sigue disponible por consola:
-```
-npm install
-npm run cargar -- PROV_20261024.txt descuentos.csv
-```
-(requiere `serviceAccount.json` en la raíz, que está en `.gitignore`). El CSV sale de SAP B1 con el
-formato de `ejemplos/descuentos.csv`. Ajusta las posiciones de columna del TXT en
-`public/js/bcp.js` **y** en `scripts/cargar-pagos-bcp.js` (deben ser iguales).
+duplican (cada uno se identifica por RUC + factura + fecha de abono). El CSV de descuentos sale de SAP B1 con el
+formato de `ejemplos/descuentos.csv` (la factura puede venir como `F001-46937`: se cruza con la del TXT
+`F00046937` por RUC y número). Si el total o la cantidad de pagos del encabezado del TXT no cuadran con
+el detalle, ese archivo queda en "Revisar".
 
 ## Probar en local
 ```

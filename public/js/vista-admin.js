@@ -218,7 +218,7 @@ function vistaPagos(cont, ctx) {
 
 /* ══════════════════════════════════════════════════════════════════
    CARGAR LOTE — TXT de Telecrédito BCP + CSV de descuentos de SAP B1
-   (lo mismo que hace scripts/cargar-pagos-bcp.js, pero desde el navegador)
+   (formato real del banco: ver public/js/bcp.js)
    ══════════════════════════════════════════════════════════════════ */
 function vistaCargar(cont, ctx) {
   cont.innerHTML = `
@@ -301,11 +301,13 @@ function vistaCargar(cont, ctx) {
           x.estado = mismo ? "igual" : "cambio"; x.incluir = !mismo;
         }
       }));
-      // Un TXT sin facturas o sin fecha de abono no se guarda solo: queda para revisar (y cargarlo a mano si se quiere).
+      // Un TXT sin facturas, sin fecha de abono o cuyo encabezado no cuadra con el detalle (total o cantidad)
+      // no se guarda solo: queda para revisar (y cargarlo a mano si se quiere).
       for (const x of lotes) {
-        if ((x.estado === "nuevo" || x.estado === "cambio") && (!x.r.pagos.length || !x.r.f)) {
+        if ((x.estado === "nuevo" || x.estado === "cambio") && !x.r.integro) {
           x.estado = "revisar"; x.incluir = false;
-          x.detalle = !x.r.pagos.length ? "no tiene facturas (¿es el TXT de Pago a Proveedores?)" : "sin fecha de abono en la cabecera";
+          x.detalle = !x.r.pagos.length ? "no tiene facturas (¿es el TXT de Pago a Proveedores?)"
+            : !x.r.f ? "sin fecha de abono en el encabezado" : x.r.avisos[0];
         }
       }
       const rucs = [...new Set(lotes.filter((x) => x.estado !== "repetido").flatMap((x) => x.r.pagos.map((p) => p.ruc)))];

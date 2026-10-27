@@ -1,19 +1,30 @@
 /* ══════════════════════════════════════════════════════════════════
-   LECTURA DEL TXT DE TELECRÉDITO BCP + CSV DE DESCUENTOS (SAP B1)
-   Versión navegador de scripts/cargar-pagos-bcp.js: misma lógica y mismas
-   posiciones. Si cambias las posiciones aquí, cámbialas también allá.
+   LECTURA DEL TXT DE TELECRÉDITO BCP ("Pago a Proveedores") + CSV DE
+   DESCUENTOS (SAP B1)
+   Formato tomado de un TXT real del banco (BCP_102026_01_20261015101650.txt):
+   ancho fijo, una línea de encabezado "#1…" y una línea " 2…" por factura.
    ══════════════════════════════════════════════════════════════════ */
 
-// === AJUSTA ESTAS POSICIONES A TU PLANTILLA TELECRÉDITO (inicio en 1, longitud) ===
-export const CABECERA = { fecha: [27, 8] };                // AAAAMMDD en registro tipo "1"
-export const DETALLE = {                                   // registro tipo "2"
-  cuentaAbono: [4, 20], tipoDoc: [24, 1], ruc: [25, 12],
-  nombre: [37, 75], importe: [115, 17], referencia: [132, 40],
+// Posiciones (inicio en 1, longitud).
+export const CABECERA = {                                   // línea "#1"
+  tipoCuenta: [4, 1], cuentaCargo: [5, 20], moneda: [25, 2], total: [27, 15], // total con 2 decimales implícitos
+  fecha: [42, 8],                                           // DDMMAAAA
+  referencia: [50, 20], cantidad: [85, 6],                  // n.º de pagos del archivo
+};
+export const DETALLE = {                                    // línea " 2" (una por comprobante)
+  tipoCuenta: [3, 1], cuenta: [4, 20], nombre: [24, 40], moneda: [64, 2],
+  importe: [66, 15],                                        // 2 decimales implícitos
+  tipoDoc: [81, 3], numDoc: [84, 12],                       // "RUC" + número
+  tipoComp: [96, 1], numComp: [97, 10],                     // F = factura, B = boleta… + número
 };
 
 const campo = (linea, [ini, len]) => linea.substr(ini - 1, len).trim();
 const num = (s) => Number(String(s).replace(",", ".")) || 0;
 const r2 = (n) => Math.round(n * 100) / 100;
+const centavos = (s) => (Number(String(s).replace(/\D/g, "")) || 0) / 100;
+const MONEDAS = { "S/": "PEN", US: "USD", "$ ": "USD", "U$": "USD" };
+/** Tipo de registro: el segundo carácter ("#1" = encabezado, " 2" = detalle). */
+const tipoRegistro = (l) => (l[0] === "#" || l[0] === " " ? l[1] : l[0]);
 
 /** Lee un File como texto latin1 (los TXT del banco y los CSV de SAP vienen así). */
 export function leerArchivo(file) {
@@ -32,8 +43,10 @@ export function leerDescuentos(texto) {
   }
   return m;
 }
+/** Número del comprobante sin serie ni ceros: "F001-00452" → 452, "F00046937" → 46937. */
+const numeroComprobante = (f) => { const m = String(f).match(/(\d+)\D*$/); return m ? Number(m[1]) : NaN; };
 
-/** ID del documento en "pagos" (el mismo que arma el script de Node). */
+/** ID del documento en "pagos": RUC + comprobante + fecha de abono (así nunca se duplica). */
 export const idPago = (ruc, factura, f) => `${ruc}_${factura.replace(/[^\w-]/g, "")}_${f}`;
 
 /** Huella SHA-256 (hex) de un archivo: reconoce un TXT ya cargado aunque se le cambie el nombre. */
@@ -52,44 +65,58 @@ export async function huellaArchivo(file) {
 /**
  * Interpreta el TXT del banco cruzado con los descuentos (texto del CSV, o
  * un mapa ya armado con leerDescuentos cuando son varios CSV).
- * Devuelve { lote, fechaPago, f, pagos[], avisos[], total, proveedores }.
+ * Devuelve { lote, fechaPago, f, pagos[], avisos[], total, proveedores, integro }.
+ * `integro` = el total y la cantidad del encabezado cuadran con el detalle.
  */
 export function interpretarLote(textoTxt, nombreTxt, descuentos) {
-  const lineas = textoTxt.split(/\r?\n/).filter(Boolean);
-  const cab = lineas.find((l) => l.startsWith("1")) || "";
-  const f = /^\d{8}$/.test(campo(cab, CABECERA.fecha)) ? campo(cab, CABECERA.fecha) : "";
+  const lineas = textoTxt.split(/\r?\n/).filter((l) => l.trim());
+  const cab = lineas.find((l) => tipoRegistro(l) === "1") || "";
+  const fd = campo(cab, CABECERA.fecha);                    // DDMMAAAA
+  const f = /^\d{8}$/.test(fd) ? `${fd.slice(4, 8)}${fd.slice(2, 4)}${fd.slice(0, 2)}` : "";
   const fechaPago = f ? `${f.slice(0, 4)}-${f.slice(4, 6)}-${f.slice(6, 8)}` : new Date().toISOString().slice(0, 10);
-  const base = String(nombreTxt || "lote").replace(/\.txt$/i, "").replace(/[^\w-]/g, "_");
+  const base = String(nombreTxt || "lote").replace(/\.txt$/i, "").replace(/^BCP_/i, "").replace(/[^\w-]/g, "_");
   const lote = `BCP_${f || "SINFECHA"}_${base}`;
   const desc = typeof descuentos === "object" && descuentos ? descuentos : leerDescuentos(descuentos);
   const hayDesc = Object.keys(desc).length > 0;
+  // Índice por RUC + número de comprobante: el TXT trae "F00046937" y SAP puede traer "F001-46937".
+  const porNumero = new Map(Object.entries(desc).map(([fac, d]) => [`${d.ruc}|${numeroComprobante(fac)}`, d]));
   const avisos = [];
-  if (!cab) avisos.push("No se encontró el registro de cabecera (tipo 1): se usó la fecha de hoy como fecha de pago.");
-  else if (!f) avisos.push("La fecha de la cabecera no tiene formato AAAAMMDD: revisa las posiciones de CABECERA.");
+  if (!cab) avisos.push("No se encontró el encabezado (línea #1): se usó la fecha de hoy como fecha de abono.");
+  else if (!f) avisos.push("La fecha del encabezado no tiene formato DDMMAAAA.");
 
   const pagos = [];
-  const detalles = lineas.filter((l) => l.startsWith("2"));
-  if (!detalles.length) avisos.push("El archivo no tiene registros de detalle (tipo 2). ¿Es el TXT de Pago a Proveedores?");
+  const detalles = lineas.filter((l) => tipoRegistro(l) === "2");
+  if (!detalles.length) avisos.push("El archivo no tiene líneas de detalle (2). ¿Es el TXT de Pago a Proveedores?");
 
   for (const l of detalles) {
-    const ruc = campo(l, DETALLE.ruc).replace(/\D/g, "");
-    const neto = num(campo(l, DETALLE.importe)) / 100;     // Telecrédito manda el importe sin punto decimal (2 decimales implícitos)
-    const facturas = campo(l, DETALLE.referencia).split(/[ ,/]+/).filter(Boolean); // "F001-00452 F001-00460"
-    if (ruc.length !== 11) avisos.push(`RUC "${ruc || "(vacío)"}" no tiene 11 dígitos (${campo(l, DETALLE.nombre) || "sin nombre"}).`);
-    for (const factura of facturas.length ? facturas : ["SIN-REF"]) {
-      const d = desc[factura] || {};
-      if (!desc[factura] && hayDesc) avisos.push(`${factura} (${ruc}) no está en el CSV de descuentos: se tomó el importe abonado como bruto.`);
-      if (desc[factura]?.ruc && desc[factura].ruc !== ruc) avisos.push(`${factura}: el RUC del CSV (${desc[factura].ruc}) no coincide con el del banco (${ruc}).`);
-      const bruto = d.bruto || neto, retencion = d.retencion || 0, detraccion = d.detraccion || 0, notaCredito = d.notaCredito || 0;
-      const netoFactura = facturas.length > 1 && d.bruto ? bruto - retencion - detraccion - notaCredito : neto;
-      pagos.push({
-        id: idPago(ruc, factura, f), ruc, razonSocial: campo(l, DETALLE.nombre), factura, fechaPago, banco: "BCP",
-        cuentaAbono: campo(l, DETALLE.cuentaAbono), bruto: r2(bruto), retencion: r2(retencion), detraccion: r2(detraccion),
-        notaCredito: r2(notaCredito), neto: r2(netoFactura), lote,
-      });
-    }
+    const tipoDoc = campo(l, DETALLE.tipoDoc).toUpperCase();
+    const ruc = campo(l, DETALLE.numDoc).replace(/\D/g, "");
+    const nombre = campo(l, DETALLE.nombre);
+    const neto = centavos(campo(l, DETALLE.importe));
+    const moneda = MONEDAS[l.substr(DETALLE.moneda[0] - 1, 2)] || "PEN";
+    const factura = `${campo(l, DETALLE.tipoComp)}${campo(l, DETALLE.numComp)}`.toUpperCase() || "SIN-REF";
+    if (tipoDoc !== "RUC") avisos.push(`${nombre || "(sin nombre)"}: el documento es ${tipoDoc || "desconocido"} ${ruc}, no RUC.`);
+    else if (ruc.length !== 11) avisos.push(`RUC "${ruc || "(vacío)"}" no tiene 11 dígitos (${nombre || "sin nombre"}).`);
+    if (moneda !== "PEN") avisos.push(`${factura} (${nombre}) está en dólares.`);
+    const d = desc[factura] || porNumero.get(`${ruc}|${numeroComprobante(factura)}`);
+    if (!d && hayDesc) avisos.push(`${factura} (${ruc}) no está en el CSV de descuentos: se tomó el importe abonado como bruto.`);
+    pagos.push({
+      id: idPago(ruc, factura, f), ruc, razonSocial: nombre, factura, fechaPago, banco: "BCP", moneda,
+      tipoCuenta: campo(l, DETALLE.tipoCuenta), cuentaAbono: campo(l, DETALLE.cuenta),
+      bruto: r2(d?.bruto || neto), retencion: r2(d?.retencion || 0), detraccion: r2(d?.detraccion || 0),
+      notaCredito: r2(d?.notaCredito || 0), neto: r2(neto), lote,
+    });
   }
   const total = r2(pagos.reduce((s, p) => s + p.neto, 0));
   const proveedores = new Set(pagos.map((p) => p.ruc)).size;
-  return { lote, fechaPago, f, pagos, avisos, total, proveedores };
+
+  // Control de integridad contra el encabezado (total y cantidad de pagos).
+  let integro = !!cab && !!f && pagos.length > 0;
+  if (cab) {
+    const totalCab = centavos(campo(cab, CABECERA.total));
+    const cantCab = Number(campo(cab, CABECERA.cantidad)) || 0;
+    if (Math.abs(totalCab - total) >= 0.005) { integro = false; avisos.unshift(`El total del encabezado (${totalCab.toFixed(2)}) no cuadra con la suma del detalle (${total.toFixed(2)}).`); }
+    if (cantCab && cantCab !== pagos.length) { integro = false; avisos.unshift(`El encabezado dice ${cantCab} pagos y el detalle trae ${pagos.length}.`); }
+  }
+  return { lote, fechaPago, f, pagos, avisos, total, proveedores, integro };
 }
