@@ -10,7 +10,7 @@ import {
   mensajeErrorLogin, validarClaveNueva, ERRORES_CLAVE,
 } from "./util.js";
 import { etiquetaRol, esInterno } from "./roles.js";
-import { MINUTOS_INACTIVIDAD, CORREO_CONTABILIDAD } from "./config.js";
+import { MINUTOS_INACTIVIDAD, SEGUNDOS_AVISO_CIERRE, HORAS_SESION_MAXIMA, CORREO_CONTABILIDAD } from "./config.js";
 import * as vistaProveedor from "./vista-proveedor.js";
 import * as vistaAdmin from "./vista-admin.js";
 import { montarPlantillas, CREDITO, LOGO, ALT_LOGO } from "./plantillas.js";
@@ -48,7 +48,13 @@ onUser((u) => {
   perfil = undefined;
   ingresoMarcado = false;
   desmontarVista();
-  if (!u) { detenerInactividad(); pantallaIngreso(); return; }
+  if (!u) {
+    detenerInactividad();
+    try { Object.keys(sessionStorage).filter((k) => k.startsWith("sesion:inicio:")).forEach((k) => sessionStorage.removeItem(k)); } catch { /* nada */ }
+    inicioSesion = 0;
+    pantallaIngreso();
+    return;
+  }
   pantallaCarga("Verificando tu acceso");
   soltarPerfil = onSnapshot(doc(db, "usuarios", u.uid), (snap) => {
     perfil = snap.exists() ? snap.data() : null;
@@ -269,21 +275,70 @@ function irA(id, params = {}) {
 // Sombra del encabezado al bajar (como el encabezado inteligente de la suite).
 window.addEventListener("scroll", () => $("#encabezado").classList.toggle("con-sombra", window.scrollY > 4), { passive: true });
 
-/* ── Cierre de sesión por inactividad ────────────────────────────── */
-let timerInactividad = 0;
-const EVENTOS_ACTIVIDAD = ["mousemove", "keydown", "click", "scroll", "touchstart"];
-function reiniciarInactividad() {
-  clearTimeout(timerInactividad);
-  timerInactividad = setTimeout(() => {
-    motivoSalida = `Tu sesión se cerró tras ${MINUTOS_INACTIVIDAD} minutos sin actividad. Vuelve a ingresar.`;
-    logout();
-  }, MINUTOS_INACTIVIDAD * 60 * 1000);
+/* ── Cierre de sesión automático ─────────────────────────────────────
+   Como la banca en línea: tras MINUTOS_INACTIVIDAD sin tocar nada aparece un
+   aviso con cuenta regresiva (SEGUNDOS_AVISO_CIERRE) y, si nadie responde, se
+   cierra la sesión. Además, cada HORAS_SESION_MAXIMA hay que volver a ingresar
+   aunque se esté usando. Se revisa con la hora real (no solo con temporizadores),
+   así también cierra al volver de una computadora suspendida. */
+const EVENTOS_ACTIVIDAD = ["mousemove", "mousedown", "keydown", "scroll", "touchstart", "wheel"];
+const LIMITE_INACTIVO = MINUTOS_INACTIVIDAD * 60 * 1000;
+const AVISO = SEGUNDOS_AVISO_CIERRE * 1000;
+const LIMITE_SESION = HORAS_SESION_MAXIMA * 3600 * 1000;
+let ultimaActividad = 0, inicioSesion = 0, relojSesion = 0, avisoCierre = null;
+
+function registrarActividad() {
+  if (!avisoCierre) ultimaActividad = Date.now(); // con el aviso abierto solo cuenta el botón
+}
+function cerrarPorTiempo(motivo) {
+  detenerInactividad();
+  motivoSalida = motivo;
+  logout();
+}
+function revisarSesion() {
+  const ahora = Date.now();
+  if (ahora - inicioSesion >= LIMITE_SESION) {
+    return cerrarPorTiempo(`Por seguridad, cada ${HORAS_SESION_MAXIMA} horas hay que volver a ingresar.`);
+  }
+  const inactivo = ahora - ultimaActividad;
+  if (inactivo >= LIMITE_INACTIVO) {
+    return cerrarPorTiempo(`Tu sesión se cerró tras ${MINUTOS_INACTIVIDAD} minutos sin actividad. Vuelve a ingresar.`);
+  }
+  const quedan = Math.ceil((LIMITE_INACTIVO - inactivo) / 1000);
+  if (inactivo >= LIMITE_INACTIVO - AVISO) mostrarAvisoCierre(quedan);
+  else if (avisoCierre) { avisoCierre.cerrar(); avisoCierre = null; }
+}
+function mostrarAvisoCierre(quedan) {
+  if (avisoCierre) { const n = avisoCierre.el.querySelector("[data-quedan]"); if (n) n.textContent = quedan; return; }
+  avisoCierre = abrirModal(`
+    <div class="modal-cab"><h2>¿Sigues ahí?</h2></div>
+    <p class="modal-sub" style="font-size:12.5px;margin-top:8px">Por seguridad, tu sesión se cerrará en
+      <b class="mono" style="font-size:16px;color:var(--rojo)" data-quedan>${quedan}</b> segundos por inactividad.</p>
+    <div class="modal-pie">
+      <button type="button" class="btn" data-salir>${icono("power")}Cerrar sesión</button>
+      <button type="button" class="btn oscuro" data-seguir autofocus>${icono("check")}Seguir conectado</button>
+    </div>`, { cerrable: false });
+  avisoCierre.el.querySelector("[data-seguir]").addEventListener("click", () => {
+    avisoCierre.cerrar(); avisoCierre = null;
+    ultimaActividad = Date.now();
+  });
+  avisoCierre.el.querySelector("[data-salir]").addEventListener("click", () => cerrarPorTiempo(""));
 }
 function iniciarInactividad() {
-  EVENTOS_ACTIVIDAD.forEach((ev) => window.addEventListener(ev, reiniciarInactividad, { passive: true }));
-  reiniciarInactividad();
+  if (relojSesion) return; // ya corre (decidir() se vuelve a llamar con cada cambio del perfil)
+  ultimaActividad = Date.now();
+  // La hora de ingreso se guarda en la pestaña: recargar la página no reinicia el tope de horas.
+  const clave = `sesion:inicio:${user?.uid}`;
+  try { inicioSesion = Number(sessionStorage.getItem(clave)) || 0; } catch { /* sin almacenamiento */ }
+  if (!inicioSesion) { inicioSesion = Date.now(); try { sessionStorage.setItem(clave, String(inicioSesion)); } catch { /* nada */ } }
+  EVENTOS_ACTIVIDAD.forEach((ev) => window.addEventListener(ev, registrarActividad, { passive: true }));
+  document.addEventListener("visibilitychange", revisarSesion);
+  relojSesion = setInterval(revisarSesion, 1000);
 }
 function detenerInactividad() {
-  clearTimeout(timerInactividad);
-  EVENTOS_ACTIVIDAD.forEach((ev) => window.removeEventListener(ev, reiniciarInactividad));
+  clearInterval(relojSesion);
+  relojSesion = 0;
+  EVENTOS_ACTIVIDAD.forEach((ev) => window.removeEventListener(ev, registrarActividad));
+  document.removeEventListener("visibilitychange", revisarSesion);
+  if (avisoCierre) { avisoCierre.cerrar(); avisoCierre = null; }
 }

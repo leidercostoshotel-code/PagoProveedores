@@ -37,7 +37,7 @@ Lo decide `firestore.rules` (no solo la pantalla). Desactivar una cuenta le cort
   - *Usuarios:* personal interno con su rol (solo administrador).
 - **Seguridad:** el personal del hotel cambia la clave en su primer ingreso (los proveedores entran con
   su RUC y su clave, por defecto su mismo RUC, sin cambio obligatorio); claves de 8+ caracteres con letras y
-  números; bloqueo por intentos fallidos; cierre de sesión tras 30 min sin actividad; la sesión no
+  números; bloqueo por intentos fallidos; cierre de sesión tras 15 min sin actividad (con aviso y cuenta regresiva 1 min antes) y cada 8 horas aunque se use; la sesión no
   sobrevive al cerrar el navegador.
 
 ## Puesta en marcha
