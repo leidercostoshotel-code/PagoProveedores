@@ -36,18 +36,33 @@ export function leerDescuentos(texto) {
 /** ID del documento en "pagos" (el mismo que arma el script de Node). */
 export const idPago = (ruc, factura, f) => `${ruc}_${factura.replace(/[^\w-]/g, "")}_${f}`;
 
+/** Huella SHA-256 (hex) de un archivo: reconoce un TXT ya cargado aunque se le cambie el nombre. */
+export async function huellaArchivo(file) {
+  const bytes = new Uint8Array(await file.arrayBuffer());
+  if (globalThis.crypto?.subtle) {
+    const h = await crypto.subtle.digest("SHA-256", bytes);
+    return Array.from(new Uint8Array(h), (b) => b.toString(16).padStart(2, "0")).join("");
+  }
+  // Sin https (p. ej. abierto por http en la red local) no hay crypto.subtle: FNV-1a de 64 bits.
+  let h = 0xcbf29ce484222325n;
+  for (const b of bytes) h = BigInt.asUintN(64, (h ^ BigInt(b)) * 0x100000001b3n);
+  return `fnv-${h.toString(16)}-${bytes.length}`;
+}
+
 /**
- * Interpreta el TXT del banco cruzado con los descuentos.
+ * Interpreta el TXT del banco cruzado con los descuentos (texto del CSV, o
+ * un mapa ya armado con leerDescuentos cuando son varios CSV).
  * Devuelve { lote, fechaPago, f, pagos[], avisos[], total, proveedores }.
  */
-export function interpretarLote(textoTxt, nombreTxt, textoCsv) {
+export function interpretarLote(textoTxt, nombreTxt, descuentos) {
   const lineas = textoTxt.split(/\r?\n/).filter(Boolean);
   const cab = lineas.find((l) => l.startsWith("1")) || "";
   const f = /^\d{8}$/.test(campo(cab, CABECERA.fecha)) ? campo(cab, CABECERA.fecha) : "";
   const fechaPago = f ? `${f.slice(0, 4)}-${f.slice(4, 6)}-${f.slice(6, 8)}` : new Date().toISOString().slice(0, 10);
   const base = String(nombreTxt || "lote").replace(/\.txt$/i, "").replace(/[^\w-]/g, "_");
   const lote = `BCP_${f || "SINFECHA"}_${base}`;
-  const desc = leerDescuentos(textoCsv);
+  const desc = typeof descuentos === "object" && descuentos ? descuentos : leerDescuentos(descuentos);
+  const hayDesc = Object.keys(desc).length > 0;
   const avisos = [];
   if (!cab) avisos.push("No se encontró el registro de cabecera (tipo 1): se usó la fecha de hoy como fecha de pago.");
   else if (!f) avisos.push("La fecha de la cabecera no tiene formato AAAAMMDD: revisa las posiciones de CABECERA.");
@@ -63,7 +78,7 @@ export function interpretarLote(textoTxt, nombreTxt, textoCsv) {
     if (ruc.length !== 11) avisos.push(`RUC "${ruc || "(vacío)"}" no tiene 11 dígitos (${campo(l, DETALLE.nombre) || "sin nombre"}).`);
     for (const factura of facturas.length ? facturas : ["SIN-REF"]) {
       const d = desc[factura] || {};
-      if (!desc[factura] && textoCsv) avisos.push(`${factura} (${ruc}) no está en el CSV de descuentos: se tomó el importe abonado como bruto.`);
+      if (!desc[factura] && hayDesc) avisos.push(`${factura} (${ruc}) no está en el CSV de descuentos: se tomó el importe abonado como bruto.`);
       if (desc[factura]?.ruc && desc[factura].ruc !== ruc) avisos.push(`${factura}: el RUC del CSV (${desc[factura].ruc}) no coincide con el del banco (${ruc}).`);
       const bruto = d.bruto || neto, retencion = d.retencion || 0, detraccion = d.detraccion || 0, notaCredito = d.notaCredito || 0;
       const netoFactura = facturas.length > 1 && d.bruto ? bruto - retencion - detraccion - notaCredito : neto;

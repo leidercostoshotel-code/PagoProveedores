@@ -97,9 +97,12 @@ Los inactivos en SAP quedan desactivados (agrega `--todos-activos` para activarl
 volver a correr con el Excel nuevo: solo crea los que faltan. Deja un informe CSV en tu carpeta de
 Cloud Shell.
 
-## Cargar un lote de pagos
+## Cargar los TXT del banco (la carpeta completa)
 
-Desde el panel: **Cargar lote**. También sigue disponible por consola:
+Desde el panel: **Cargar lotes** → **Elegir carpeta** (o arrastra la carpeta). Toma todos los TXT (y los
+CSV de descuentos) de la carpeta. Cada vez que vuelvas a subirla, los archivos ya cargados se reconocen
+solos —aunque les cambies el nombre— y se omiten: solo se cargan los nuevos. Los pagos nunca se
+duplican (cada uno se identifica por RUC + factura + fecha de abono). También sigue disponible por consola:
 ```
 npm install
 npm run cargar -- PROV_20261024.txt descuentos.csv
