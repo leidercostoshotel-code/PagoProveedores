@@ -31,5 +31,10 @@ export const NOMBRE_SISTEMA = "Portal de Proveedores";
 // Correo de Contabilidad que se muestra al proveedor para consultas.
 export const CORREO_CONTABILIDAD = "contabilidad@hotel.com";
 
-// Cierre de sesión automático tras este tiempo sin actividad (minutos).
-export const MINUTOS_INACTIVIDAD = 30;
+// Cierre de sesión automático (como la banca en línea):
+// - tras este tiempo SIN actividad (minutos), con un aviso y cuenta regresiva antes;
+export const MINUTOS_INACTIVIDAD = 15;
+// - segundos de aviso ("Tu sesión se cerrará en 60 s · Seguir conectado") antes de cerrarla;
+export const SEGUNDOS_AVISO_CIERRE = 60;
+// - y, aunque haya actividad, cada cierto tiempo hay que volver a ingresar (horas).
+export const HORAS_SESION_MAXIMA = 8;

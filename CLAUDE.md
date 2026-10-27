@@ -12,7 +12,11 @@ del hotel administra todo desde el mismo portal. Login y estilo copiados de la s
 - `public/css/estilos.css` — todos los estilos (paleta de la suite: tinta #0B1F3A, cinta #FFDC3D, papel #EDF1F6).
 - `public/js/config.js` — configuración de Firebase (placeholders `TU_...` que reemplaza el workflow con los secrets), dominio de proveedores, correo de Contabilidad, minutos de inactividad.
 - `public/js/firebase.js` — Auth/Firestore/Functions: `login()` con bloqueo, `cambiarPassword()`, `crearUsuario()` (segunda instancia de Auth), `restablecerClave()`.
-- `public/js/app.js` — flujo de pantallas: carga → ingreso → perfil → cambio de clave obligatorio → app por rol; inactividad.
+- `public/js/app.js` — flujo de pantallas: carga → ingreso → perfil → cambio de clave obligatorio → app por rol;
+  cierre de sesión automático: tras `MINUTOS_INACTIVIDAD` (15) sin actividad, con aviso "¿Sigues ahí?" y cuenta
+  regresiva `SEGUNDOS_AVISO_CIERRE` (60) antes, y cada `HORAS_SESION_MAXIMA` (8) aunque se use (config.js).
+  Se revisa con la hora real cada segundo y al volver a la pestaña (cierra tras suspender la PC); la hora de
+  ingreso va en sessionStorage, así recargar no reinicia el tope.
 - `public/js/vista-proveedor.js` / `vista-admin.js` — pestañas; cada una exporta `pestanas(rol)` y `montar(id, contenedor, ctx)` (devuelve función de limpieza).
 - `public/js/bcp.js` — lector del TXT Telecrédito BCP + CSV SAP en el navegador. **Mismas posiciones que `scripts/cargar-pagos-bcp.js`.**
 - `public/js/util.js` — íconos SVG, formato, modales, CSV, mensajes de error. `roles.js` — roles.
