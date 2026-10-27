@@ -57,14 +57,20 @@ admin se crea a mano en la consola (ver README).
   `bash <(curl -fsSL https://raw.githubusercontent.com/leidercostoshotel-code/PagoProveedores/main/scripts/desplegar-cloudshell.sh) ID_PROYECTO [hosting reglas functions]`
   (GitHub Actions falla mientras la cuenta de servicio no tenga los roles; ver el workflow).
 
-## Paginación obligatoria (pedido del dueño)
-**Toda lista del portal va paginada** (25/50/100 por página, se recuerda por lista): `paginador()` y
-`htmlPagina()` en util.js para listas ya cargadas (Pagos, Lotes, Usuarios, vista previa del lote, Mis
-pagos, Resumen por mes). **Proveedores pagina en el servidor** (puede haber miles): `orderBy` + `limit`
-+ `startAfter` y el total con `getCountFromServer`; búsqueda por cómo empieza el RUC o la razón social
-(en MAYÚSCULAS). Usa los índices de `firestore.indexes.json` (rol + razonSocial/ruc, con y sin activo).
-Nunca leer la colección `usuarios` entera desde el panel (la vista previa del lote consulta solo los
-RUC del lote, de 30 en 30). Una tabla nueva lleva su paginador desde el día uno.
+## Paginación obligatoria EN EL SERVIDOR (pedido del dueño)
+**Toda lista que se lee de Firestore va paginada en el servidor** con `paginaServidor()`
+(`public/js/paginaServidor.js`): `orden + limit + startAfter` para la página visible y el total —y las
+sumas que hagan falta— con `getAggregateFromServer` (count/sum), sin descargar los documentos.
+25/50/100 por página, se recuerda por lista; `cargar(true)` al cambiar filtros, `recargar()` tras editar.
+- Admin: **Pagos** (fechas; o RUC + fechas; o razón social / factura / lote en todas las fechas, porque
+  Firestore no combina dos rangos; totales de la consulta con sum), **Lotes**, **Proveedores** (búsqueda
+  por cómo empieza el RUC o la razón social en MAYÚSCULAS), **Usuarios**.
+- Proveedor: **Mis pagos** (año/mes o factura exacta; totales con sum; "último abono" y años del filtro
+  con 2 lecturas) y **Resumen por mes** (un año por vez = 12 agregaciones).
+- Solo la vista previa del lote (archivo local, no Firestore) usa `paginador()` en el navegador.
+- Índices en `firestore.indexes.json`. Las exportaciones CSV sí leen todo lo filtrado (piden confirmar
+  si pasan de 500). Nunca leer una colección entera para pintar una tabla. Una tabla nueva usa
+  `paginaServidor` desde el día uno (y sus índices).
 
 ## Convenciones
 - Código y comentarios en español. Sin frameworks en el frontend (HTML + CSS + JS módulos).

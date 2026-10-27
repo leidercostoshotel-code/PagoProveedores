@@ -8,7 +8,7 @@
 import { initializeTestEnvironment, assertSucceeds, assertFails } from "@firebase/rules-unit-testing";
 import fs from "fs";
 import { fileURLToPath } from "url";
-import { doc, getDoc, getDocs, setDoc, updateDoc, deleteDoc, collection, query, where, serverTimestamp } from "firebase/firestore";
+import { doc, getDoc, getDocs, setDoc, updateDoc, deleteDoc, collection, query, where, serverTimestamp, getAggregateFromServer, count, sum } from "firebase/firestore";
 
 const [host, port] = (process.env.FIRESTORE_EMULATOR_HOST || "127.0.0.1:8080").split(":");
 const reglas = fs.readFileSync(fileURLToPath(new URL("../firestore.rules", import.meta.url)), "utf8");
@@ -55,6 +55,10 @@ await caso("lee SUS pagos", true, () => pagosDe(db, "20111111111"));
 await caso("NO lee pagos de B (consulta)", false, () => pagosDe(db, "20222222222"));
 await caso("NO lee pago de B (directo)", false, () => getDoc(doc(db, "pagos", "B1")));
 await caso("NO lista todos los pagos", false, () => getDocs(collection(db, "pagos")));
+await caso("cuenta y suma SUS pagos (totales del servidor)", true, () => getAggregateFromServer(query(collection(db, "pagos"), where("ruc", "==", "20111111111")), { n: count(), neto: sum("neto") }));
+await caso("NO cuenta/suma los pagos de B", false, () => getAggregateFromServer(query(collection(db, "pagos"), where("ruc", "==", "20222222222")), { n: count(), neto: sum("neto") }));
+await caso("NO cuenta/suma todos los pagos", false, () => getAggregateFromServer(collection(db, "pagos"), { n: count(), neto: sum("neto") }));
+await caso("NO cuenta usuarios", false, () => getAggregateFromServer(collection(db, "usuarios"), { n: count() }));
 await caso("NO lista con 'in' de varios RUC", false, () => getDocs(query(collection(db, "pagos"), where("ruc", "in", ["20111111111", "20222222222"]))));
 await caso("NO lee lotes", false, () => getDocs(collection(db, "lotes")));
 await caso("NO lista usuarios", false, () => getDocs(collection(db, "usuarios")));
@@ -81,6 +85,7 @@ console.log("Consulta");
 db = as("CSU");
 await caso("lee todos los pagos", true, () => getDocs(collection(db, "pagos")));
 await caso("lee lotes", true, () => getDocs(collection(db, "lotes")));
+await caso("suma todos los pagos (totales del panel)", true, () => getAggregateFromServer(collection(db, "pagos"), { n: count(), neto: sum("neto") }));
 await caso("NO escribe pagos", false, () => setDoc(doc(db, "pagos", "Z"), { ruc: "1" }));
 await caso("NO crea proveedores", false, () => setDoc(doc(db, "usuarios", "N1"), { rol: "proveedor", activo: true, ruc: "20444444444" }));
 await caso("NO se sube a admin", false, () => updateDoc(doc(db, "usuarios", "CSU"), { rol: "admin" }));
