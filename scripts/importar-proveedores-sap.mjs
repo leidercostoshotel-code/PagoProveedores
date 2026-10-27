@@ -59,11 +59,12 @@ const texto = (v) => {
   return String(v);
 };
 const norm = (s) => s.toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, "").trim();
-const COLUMNAS = { // encabezado de SAP → columna por defecto (1 = A)
-  nombre: ["nombre sn", 3], ruc: ["numero de identificacion fiscal", 25], codigo: ["codigo sn", 2],
-  clase: ["clase de socio de negocios", 4], activo: ["activo", 152], borrado: ["borrado", 180],
-  correo: ["correo electronico", 58], telefono: ["telefono 1", 11],
+const COLUMNAS = { // encabezado de SAP (exacto o que lo contenga) → columna por defecto (1 = A)
+  nombre: [["nombre sn", "nombre de socio", "razon social"], 3], ruc: [["identificacion fiscal", "ruc"], 25],
+  codigo: [["codigo sn", "codigo de socio"], 2], clase: [["clase de socio"], 0], activo: [["activo"], 0],
+  borrado: [["borrado"], 0], correo: [["correo electronico", "e-mail"], 0], telefono: [["telefono 1"], 0],
 };
+const letra = (i) => { let s = ""; for (let n = i; n > 0; n = Math.floor((n - 1) / 26)) s = String.fromCharCode(65 + ((n - 1) % 26)) + s; return s; };
 
 const porRuc = new Map();
 const omitidos = { cliente: 0, borrado: 0, rucInvalido: 0, sinNombre: 0 };
@@ -74,19 +75,23 @@ for await (const hoja of lector) {
     const v = fila.values; // 1 = A
     if (!col) {
       const enc = v.map((x) => norm(texto(x)));
-      col = Object.fromEntries(Object.entries(COLUMNAS).map(([k, [nombre, def]]) => {
-        const i = enc.indexOf(nombre);
-        return [k, i > 0 ? i : (k === "nombre" || k === "ruc" ? def : 0)];
-      }));
-      if (enc.indexOf("nombre sn") < 0 || enc.indexOf("numero de identificacion fiscal") < 0) {
-        console.log("ⓘ No encontré los encabezados de SAP: uso la columna C (nombre) y la Y (RUC).");
-      }
+      const buscar = (nombres) => {
+        for (const nm of nombres) { const i = enc.indexOf(nm); if (i > 0) return i; }       // exacto
+        // "lo contiene" solo con nombres largos y nunca para activo/borrado ("inactivo" contiene "activo").
+        for (const nm of nombres.filter((x) => x.length > 6)) { const i = enc.findIndex((h, j) => j > 0 && h.includes(nm)); if (i > 0) return i; }
+        return 0;
+      };
+      col = Object.fromEntries(Object.entries(COLUMNAS).map(([k, [nombres, def]]) => [k, buscar(nombres) || def]));
+      console.log(`Columnas: nombre ${letra(col.nombre)} (${texto(v[col.nombre]) || "sin encabezado"}) · RUC ${letra(col.ruc)} (${texto(v[col.ruc]) || "sin encabezado"})`
+        + `${col.clase ? ` · clase ${letra(col.clase)}` : " · sin columna de clase: se usa el código (C… = cliente)"}${col.activo ? ` · activo ${letra(col.activo)}` : ""}`);
       continue;
     }
     filas++;
     const celda = (k) => (col[k] ? texto(v[col[k]]).trim() : "");
     const clase = celda("clase").toUpperCase();
     if (clase && clase !== "S") { omitidos.cliente++; continue; }
+    // Sin columna de clase (otros reportes de SAP): un código que empieza con C es de cliente.
+    if (!col.clase && /^\s*C/i.test(celda("codigo"))) { omitidos.cliente++; continue; }
     if (celda("borrado").toUpperCase() === "Y") { omitidos.borrado++; continue; }
     const ruc = celda("ruc").replace(/\D/g, "");
     if (!/^(10|15|17|20)\d{9}$/.test(ruc)) { omitidos.rucInvalido++; continue; }
