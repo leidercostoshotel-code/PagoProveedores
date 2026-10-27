@@ -62,6 +62,17 @@ Lo decide `firestore.rules` (no solo la pantalla). Desactivar una cuenta le cort
 5. *(Opcional, plan Blaze)* Cloud Functions para el bloqueo por intentos y "Restablecer clave":
    el workflow las despliega; a mano, `npm run deploy:functions`. Sin ellas el portal funciona igual.
 
+### Publicar desde Google Cloud Shell (sin GitHub Actions)
+
+Abre https://shell.cloud.google.com con la cuenta dueña del proyecto de Firebase y pega
+(cambia `ID_PROYECTO` por el **ID del proyecto de Firebase**, no el nombre del repositorio):
+```
+bash <(curl -fsSL https://raw.githubusercontent.com/leidercostoshotel-code/PagoProveedores/main/scripts/desplegar-cloudshell.sh) ID_PROYECTO
+```
+Por defecto publica `hosting` y `reglas`; agrega `functions` al final si tienes plan Blaze.
+La configuración web la saca sola del proyecto (no hace falta pegar la apiKey). Trabaja en
+`/tmp`, usa siempre `--project` y se niega a correr con `leitime`, así que no toca otros proyectos.
+
 ### El primer administrador (una sola vez, en la consola de Firebase)
 
 1. **Authentication → Users → Agregar usuario**: tu correo y una clave.

@@ -18,6 +18,7 @@ del hotel administra todo desde el mismo portal. Login y estilo copiados de la s
 - `public/js/util.js` — íconos SVG, formato, modales, CSV, mensajes de error. `roles.js` — roles.
 - `functions/index.js` — `verificarBloqueoLogin`, `registrarIntentoFallido`, `limpiarIntentosLogin`, `restablecerClave` (plan Blaze, opcionales).
 - `firestore.rules` — roles con perfil en `usuarios/{uid}`; proveedor solo lee `pagos` con su `ruc`.
+- `scripts/desplegar-cloudshell.sh` — despliegue desde Google Cloud Shell (una línea; nunca con `leitime`).
 - `.github/workflows/firebase-deploy.yml` — despliega Hosting, Firestore y Functions con secrets `FIREBASE_*`.
 
 ## Modelo de datos
@@ -36,6 +37,12 @@ basta escribir el RUC). Las cuentas se crean desde Administración con clave ini
 ## Pendientes conocidos
 - Ajustar posiciones de ancho fijo del TXT (en `public/js/bcp.js` y en el script) con un TXT real.
 - Posible soporte futuro para TXT de Interbank y BBVA.
+
+## Flujo de trabajo (pedido del dueño)
+- **Claude crea el PR y lo fusiona él mismo en GitHub** al terminar cada cambio (no esperar a que el dueño haga clic).
+- Al terminar, darle al dueño el comando de Cloud Shell para publicar:
+  `bash <(curl -fsSL https://raw.githubusercontent.com/leidercostoshotel-code/PagoProveedores/main/scripts/desplegar-cloudshell.sh) ID_PROYECTO [hosting reglas functions]`
+  (GitHub Actions falla mientras la cuenta de servicio no tenga los roles; ver el workflow).
 
 ## Convenciones
 - Código y comentarios en español. Sin frameworks en el frontend (HTML + CSS + JS módulos).
