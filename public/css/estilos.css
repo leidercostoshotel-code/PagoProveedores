@@ -269,3 +269,12 @@ td.vacio { padding: 28px; text-align: center; color: var(--gris); }
   .modal { max-width: none; box-shadow: none; border: 0; max-height: none; }
   th { position: static; }
 }
+
+/* ── Paginación ─────────────────────────────────────────────────── */
+.paginacion { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px 16px; margin-top: 10px; font-size: 11.5px; color: var(--gris); }
+.paginacion b { color: var(--tinta); }
+.paginacion-nav { display: flex; align-items: center; gap: 4px; }
+.paginacion-nav .btn { min-width: 30px; font-size: 13px; padding: 3px 8px; }
+.paginacion-num { padding: 0 8px; font-weight: 700; color: var(--tinta); white-space: nowrap; }
+.paginacion-tam { display: flex; align-items: center; gap: 6px; }
+@media (max-width: 640px) { .paginacion { justify-content: center; } }

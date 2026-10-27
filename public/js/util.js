@@ -202,3 +202,63 @@ export function activarOjos(raiz) {
     b.innerHTML = icono(ver ? "ojoNo" : "ojo");
   }));
 }
+
+/* ── Paginación (obligatoria en toda lista del portal) ───────────── */
+export const TAMANOS_PAGINA = [25, 50, 100];
+const fmtEntero = new Intl.NumberFormat("es-PE");
+const leerTam = (clave) => { try { const n = Number(localStorage.getItem(`pag:${clave}`)); return TAMANOS_PAGINA.includes(n) ? n : 0; } catch { return 0; } };
+const guardarTam = (clave, n) => { try { localStorage.setItem(`pag:${clave}`, String(n)); } catch { /* sin almacenamiento */ } };
+
+/** Barra de paginación. `saltos` = mostrar primera/última (en la paginación del servidor no se puede saltar). */
+export function htmlPagina({ pagina, paginas, total, desde, hasta, tam, saltos = true, etiqueta = "registros" }) {
+  const b = (acc, txt, off, titulo) => `<button type="button" class="btn chico" data-pag="${acc}" ${off ? "disabled" : ""} title="${titulo}" aria-label="${titulo}">${txt}</button>`;
+  return `<div class="paginacion no-imprimir">
+    <span>${total ? `Mostrando <b>${fmtEntero.format(desde)}–${fmtEntero.format(hasta)}</b> de <b>${fmtEntero.format(total)}</b> ${etiqueta}` : `0 ${etiqueta}`}</span>
+    <div class="paginacion-nav">
+      ${saltos ? b("primera", "«", pagina <= 1, "Primera página") : ""}${b("anterior", "‹", pagina <= 1, "Página anterior")}
+      <span class="paginacion-num">Página ${fmtEntero.format(pagina)} de ${fmtEntero.format(paginas)}</span>
+      ${b("siguiente", "›", pagina >= paginas, "Página siguiente")}${saltos ? b("ultima", "»", pagina >= paginas, "Última página") : ""}
+    </div>
+    <label class="paginacion-tam">Por página <select class="select chico" data-tam>${TAMANOS_PAGINA.map((n) => `<option ${n === tam ? "selected" : ""}>${n}</option>`).join("")}</select></label>
+  </div>`;
+}
+
+/**
+ * Paginación en el navegador para una lista ya cargada.
+ * Uso: const pag = paginador("pagos", pintar);  pag.enganchar(elBarra);
+ *      const { visibles, html } = pag.cortar(lista);  elBarra.innerHTML = html;
+ * `reiniciar()` vuelve a la página 1 (al cambiar filtros o búsqueda).
+ */
+export function paginador(clave, alCambiar, { etiqueta = "registros" } = {}) {
+  const st = { pagina: 1, tam: leerTam(clave) || TAMANOS_PAGINA[0], paginas: 1 };
+  return {
+    reiniciar() { st.pagina = 1; },
+    get tam() { return st.tam; },
+    cortar(lista) {
+      const total = lista.length;
+      st.paginas = Math.max(1, Math.ceil(total / st.tam));
+      if (st.pagina > st.paginas) st.pagina = st.paginas;
+      const ini = (st.pagina - 1) * st.tam;
+      return {
+        visibles: lista.slice(ini, ini + st.tam), inicio: ini,
+        html: htmlPagina({ pagina: st.pagina, paginas: st.paginas, total, desde: total ? ini + 1 : 0, hasta: Math.min(ini + st.tam, total), tam: st.tam, etiqueta }),
+      };
+    },
+    enganchar(el) {
+      el.addEventListener("click", (e) => {
+        const b = e.target.closest("[data-pag]");
+        if (!b || b.disabled) return;
+        st.pagina = { primera: 1, anterior: st.pagina - 1, siguiente: st.pagina + 1, ultima: st.paginas }[b.dataset.pag];
+        alCambiar();
+      });
+      el.addEventListener("change", (e) => {
+        if (!e.target.matches("[data-tam]")) return;
+        st.tam = Number(e.target.value);
+        guardarTam(clave, st.tam);
+        st.pagina = 1;
+        alCambiar();
+      });
+    },
+  };
+}
+export { leerTam, guardarTam };

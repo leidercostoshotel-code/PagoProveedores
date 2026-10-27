@@ -6,7 +6,7 @@ import { db } from "./firebase.js";
 import { collection, query, where, orderBy, getDocs } from "https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore.js";
 import {
   $, esc, icono, soles, solesS, fechaCorta, enmascarar, normalizar, NOMBRES_MES,
-  abrirModal, descargarCSV, notificar,
+  abrirModal, descargarCSV, notificar, paginador,
 } from "./util.js";
 import { CORREO_CONTABILIDAD, EMPRESA } from "./config.js";
 
@@ -70,11 +70,15 @@ function vistaPagos(cont, ctx, pagos) {
           <th class="num">Retención</th><th class="num">Detracción</th><th class="num">N. crédito</th><th class="num">Neto abonado</th></tr></thead>
         <tbody id="tb"></tbody><tfoot id="tf"></tfoot>
       </table></div>
+      <div id="pag"></div>
       <p class="ayuda">¿Dudas sobre un pago? Escribe a <a href="mailto:${esc(CORREO_CONTABILIDAD)}">${esc(CORREO_CONTABILIDAD)}</a> indicando tu RUC y el número de factura.</p>
     </div>`;
 
   let filtradas = [];
-  function pintar() {
+  const pag = paginador("prov-pagos", () => pintar(false), { etiqueta: "facturas" });
+  pag.enganchar($("#pag", cont));
+  function pintar(reiniciar = true) {
+    if (reiniciar) pag.reiniciar();
     const anio = $("#f-anio", cont).value, mes = $("#f-mes", cont).value, texto = normalizar($("#f-buscar", cont).value);
     filtradas = pagos.filter((p) => (!anio || p.fechaPago?.startsWith(anio)) && (!mes || p.fechaPago?.slice(5, 7) === mes)
       && (!texto || normalizar(p.factura).includes(texto)));
@@ -84,8 +88,10 @@ function vistaPagos(cont, ctx, pagos) {
       <div class="tarjeta"><div class="etiqueta">Facturas pagadas</div><div class="valor">${filtradas.length}</div><div class="sub">en el periodo elegido</div></div>
       <div class="tarjeta"><div class="etiqueta">Retenciones</div><div class="valor">${soles(sumar(filtradas, "retencion"))}</div><div class="sub">Detracciones: ${soles(sumar(filtradas, "detraccion"))}</div></div>
       <div class="tarjeta"><div class="etiqueta">Último abono</div><div class="valor">${ultimo ? fechaCorta(ultimo.fechaPago) : "—"}</div><div class="sub">${ultimo ? `${esc(ultimo.factura)} · ${solesS(ultimo.neto)}` : "Aún no hay pagos"}</div></div>`;
-    $("#tb", cont).innerHTML = filtradas.map((p, i) => `
-      <tr class="clic" data-i="${i}" tabindex="0">
+    const { visibles, inicio, html } = pag.cortar(filtradas);
+    $("#pag", cont).innerHTML = html;
+    $("#tb", cont).innerHTML = visibles.map((p, i) => `
+      <tr class="clic" data-i="${inicio + i}" tabindex="0">
         <td class="mono">${esc(p.factura)}</td><td>${fechaCorta(p.fechaPago)}</td><td>${esc(p.banco)}</td><td class="mono">${esc(enmascarar(p.cuentaAbono))}</td>
         <td class="num">${soles(p.bruto)}</td><td class="num descuento">${p.retencion ? soles(p.retencion) : "—"}</td>
         <td class="num descuento">${p.detraccion ? soles(p.detraccion) : "—"}</td><td class="num descuento">${p.notaCredito ? soles(p.notaCredito) : "—"}</td>
@@ -96,8 +102,8 @@ function vistaPagos(cont, ctx, pagos) {
       <td class="num">${soles(sumar(filtradas, "detraccion"))}</td><td class="num">${soles(sumar(filtradas, "notaCredito"))}</td>
       <td class="num">${soles(sumar(filtradas, "neto"))}</td></tr>` : "";
   }
-  ["#f-anio", "#f-mes"].forEach((s) => $(s, cont).addEventListener("change", pintar));
-  $("#f-buscar", cont).addEventListener("input", pintar);
+  ["#f-anio", "#f-mes"].forEach((s) => $(s, cont).addEventListener("change", () => pintar()));
+  $("#f-buscar", cont).addEventListener("input", () => pintar());
   const abrir = (tr) => tr && constancia(filtradas[Number(tr.dataset.i)], ctx.perfil);
   $("#tb", cont).addEventListener("click", (e) => abrir(e.target.closest("tr[data-i]")));
   $("#tb", cont).addEventListener("keydown", (e) => { if (e.key === "Enter") abrir(e.target.closest("tr[data-i]")); });
@@ -130,14 +136,22 @@ function vistaResumen(cont, ctx, pagos) {
       <div class="tabla-caja"><table>
         <thead><tr><th>Mes</th><th class="num">Facturas</th><th class="num">Bruto</th><th class="num">Retención</th>
           <th class="num">Detracción</th><th class="num">N. crédito</th><th class="num">Neto abonado</th></tr></thead>
-        <tbody>${filas.map((k) => { const l = meses[k]; return `<tr>
-          <td>${NOMBRES_MES[Number(k.slice(5, 7)) - 1]} ${k.slice(0, 4)}</td><td class="num">${l.length}</td>
-          <td class="num">${soles(sumar(l, "bruto"))}</td><td class="num descuento">${soles(sumar(l, "retencion"))}</td>
-          <td class="num descuento">${soles(sumar(l, "detraccion"))}</td><td class="num descuento">${soles(sumar(l, "notaCredito"))}</td>
-          <td class="num neto">${soles(sumar(l, "neto"))}</td></tr>`; }).join("") || `<tr><td colspan="7" class="vacio">Aún no hay pagos registrados.</td></tr>`}
-        </tbody>
+        <tbody id="tb"></tbody>
       </table></div>
+      <div id="pag"></div>
     </div>`;
+  const pag = paginador("prov-resumen", pintar, { etiqueta: "meses" });
+  pag.enganchar($("#pag", cont));
+  function pintar() {
+    const { visibles, html } = pag.cortar(filas);
+    $("#pag", cont).innerHTML = html;
+    $("#tb", cont).innerHTML = visibles.map((k) => { const l = meses[k]; return `<tr>
+      <td>${NOMBRES_MES[Number(k.slice(5, 7)) - 1]} ${k.slice(0, 4)}</td><td class="num">${l.length}</td>
+      <td class="num">${soles(sumar(l, "bruto"))}</td><td class="num descuento">${soles(sumar(l, "retencion"))}</td>
+      <td class="num descuento">${soles(sumar(l, "detraccion"))}</td><td class="num descuento">${soles(sumar(l, "notaCredito"))}</td>
+      <td class="num neto">${soles(sumar(l, "neto"))}</td></tr>`; }).join("") || `<tr><td colspan="7" class="vacio">Aún no hay pagos registrados.</td></tr>`;
+  }
+  pintar();
   $("#imprimir", cont).addEventListener("click", () => window.print());
 }
 
