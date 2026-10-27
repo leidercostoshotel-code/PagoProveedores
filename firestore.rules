@@ -1,0 +1,64 @@
+rules_version = '2';
+
+// Portal de Proveedores. Roles en usuarios/{uid}.rol (ver public/js/roles.js):
+//   admin · contabilidad · consulta  → personal del hotel
+//   proveedor                         → solo sus pagos (los de su RUC)
+// Mismo esquema que la suite A-B-Swiss: perfil en "usuarios" + activo().
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    function tienePerfil() {
+      return request.auth != null
+        && exists(/databases/$(database)/documents/usuarios/$(request.auth.uid));
+    }
+    function perfil() {
+      return get(/databases/$(database)/documents/usuarios/$(request.auth.uid)).data;
+    }
+    // Autenticado + tiene perfil + no está desactivado.
+    function activo() {
+      return tienePerfil() && perfil().activo == true;
+    }
+    function rol() { return perfil().rol; }
+    function esAdmin() { return activo() && rol() == 'admin'; }
+    function esInterno() { return activo() && rol() in ['admin', 'contabilidad', 'consulta']; }
+    function gestiona() { return activo() && rol() in ['admin', 'contabilidad']; }
+    function esProveedorDe(ruc) {
+      return activo() && rol() == 'proveedor' && perfil().ruc == ruc;
+    }
+    function propio(uid) { return request.auth != null && request.auth.uid == uid; }
+    function cambios() { return request.resource.data.diff(resource.data).affectedKeys(); }
+
+    // Perfiles de acceso.
+    match /usuarios/{uid} {
+      allow read: if propio(uid) || esInterno();
+      // Admin crea a cualquiera; Contabilidad solo cuentas de proveedor.
+      allow create: if esAdmin()
+        || (gestiona() && request.resource.data.rol == 'proveedor');
+      allow update: if (esAdmin() && !(propio(uid) && cambios().hasAny(['rol', 'activo'])))
+        || (gestiona() && resource.data.rol == 'proveedor' && request.resource.data.rol == 'proveedor'
+            && request.resource.data.ruc == resource.data.ruc)
+        // Cada quien solo puede marcar que ya cambió su clave y su último ingreso.
+        || (propio(uid)
+            && cambios().hasOnly(['debeCambiarClave', 'claveCambiadaEn', 'ultimoIngreso'])
+            && (!cambios().hasAny(['debeCambiarClave']) || request.resource.data.debeCambiarClave == false));
+      allow delete: if esAdmin() && !propio(uid);
+    }
+
+    // Pagos (ID = RUC_FACTURA_AAAAMMDD). El proveedor solo ve los de su RUC.
+    match /pagos/{id} {
+      allow read: if esInterno() || esProveedorDe(resource.data.ruc);
+      allow write: if gestiona();
+    }
+
+    // Historial de lotes cargados.
+    match /lotes/{id} {
+      allow read: if esInterno();
+      allow write: if gestiona();
+    }
+
+    // Bloqueo por intentos fallidos: solo lo tocan las Cloud Functions (Admin SDK).
+    match /intentos_login/{email} {
+      allow read, write: if false;
+    }
+  }
+}

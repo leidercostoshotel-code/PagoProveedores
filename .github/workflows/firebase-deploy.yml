@@ -1,0 +1,77 @@
+name: Deploy a Firebase
+
+# Publica el portal (Hosting), las reglas e índices de Firestore y las Cloud
+# Functions cada vez que se mergea algo a main (o a mano con "Run workflow").
+#
+# Secrets del repositorio (Settings → Secrets and variables → Actions → New secret):
+#   FIREBASE_SERVICE_ACCOUNT      JSON completo de una cuenta de servicio del proyecto
+#                                 (roles: Firebase Hosting Admin, Firebase Rules Admin,
+#                                 Cloud Datastore Index Admin, Service Usage Consumer;
+#                                 para Functions además Cloud Functions Admin,
+#                                 Service Account User y Artifact Registry Administrator)
+#   FIREBASE_PROJECT_ID           ej. portal-proveedores-1a2b3
+#   FIREBASE_API_KEY              ej. AIzaSy...
+#   FIREBASE_AUTH_DOMAIN          ej. portal-proveedores-1a2b3.firebaseapp.com
+#   FIREBASE_STORAGE_BUCKET       ej. portal-proveedores-1a2b3.firebasestorage.app
+#   FIREBASE_MESSAGING_SENDER_ID  ej. 123456789012
+#   FIREBASE_APP_ID               ej. 1:123456789012:web:abc123
+# Los 6 últimos salen de Consola de Firebase → Configuración del proyecto → Tus apps → Web.
+on:
+  push:
+    branches: [main]
+  workflow_dispatch: {}
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Poner la configuración de Firebase en el portal
+        env:
+          API_KEY: ${{ secrets.FIREBASE_API_KEY }}
+          AUTH_DOMAIN: ${{ secrets.FIREBASE_AUTH_DOMAIN }}
+          PROJECT_ID: ${{ secrets.FIREBASE_PROJECT_ID }}
+          STORAGE_BUCKET: ${{ secrets.FIREBASE_STORAGE_BUCKET }}
+          SENDER_ID: ${{ secrets.FIREBASE_MESSAGING_SENDER_ID }}
+          APP_ID: ${{ secrets.FIREBASE_APP_ID }}
+        run: |
+          for v in API_KEY AUTH_DOMAIN PROJECT_ID APP_ID; do
+            [ -n "${!v}" ] || { echo "Falta el secret FIREBASE_$v"; exit 1; }
+          done
+          node -e '
+            const fs = require("fs"), f = "public/js/config.js";
+            const e = process.env, r = { TU_API_KEY: e.API_KEY, TU_AUTH_DOMAIN: e.AUTH_DOMAIN, TU_PROJECT_ID: e.PROJECT_ID,
+              TU_STORAGE_BUCKET: e.STORAGE_BUCKET || "", TU_MESSAGING_SENDER_ID: e.SENDER_ID || "", TU_APP_ID: e.APP_ID };
+            let s = fs.readFileSync(f, "utf8");
+            for (const [k, v] of Object.entries(r)) s = s.replace(`"${k}"`, JSON.stringify(v.trim()));
+            fs.writeFileSync(f, s);
+          '
+
+      - name: Autenticar con Google Cloud
+        uses: google-github-actions/auth@v2
+        with:
+          credentials_json: "${{ secrets.FIREBASE_SERVICE_ACCOUNT }}"
+
+      - name: Deploy a Firebase Hosting
+        run: npx --yes firebase-tools@latest deploy --only hosting --project "${{ secrets.FIREBASE_PROJECT_ID }}" --non-interactive
+
+      - name: Deploy reglas e índices de Firestore
+        run: npx --yes firebase-tools@latest deploy --only firestore --project "${{ secrets.FIREBASE_PROJECT_ID }}" --non-interactive
+
+      # Opcional: necesita el plan Blaze y los roles extra de la cuenta de
+      # servicio. Si falla, el portal igual queda publicado (sin el bloqueo
+      # por intentos propio ni "Restablecer clave").
+      - name: Instalar dependencias de Cloud Functions
+        working-directory: functions
+        run: npm install --omit=dev
+
+      - name: Deploy Cloud Functions
+        continue-on-error: true
+        run: npx --yes firebase-tools@latest deploy --only functions --project "${{ secrets.FIREBASE_PROJECT_ID }}" --non-interactive --force

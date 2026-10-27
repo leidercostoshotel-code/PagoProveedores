@@ -1,0 +1,11 @@
+{
+  "name": "functions",
+  "private": true,
+  "description": "Cloud Functions del Portal de Proveedores: bloqueo por intentos fallidos de login y restablecer clave desde Administración.",
+  "engines": { "node": "22" },
+  "main": "index.js",
+  "dependencies": {
+    "firebase-admin": "^12.6.0",
+    "firebase-functions": "^5.1.1"
+  }
+}
