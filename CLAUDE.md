@@ -36,7 +36,17 @@ del hotel administra todo desde el mismo portal. Login y estilo copiados de la s
 - `pagos/{RUC_FACTURA_AAAAMMDD}`: ruc, razonSocial, factura, fechaPago (YYYY-MM-DD), banco, cuentaAbono,
   bruto, retencion, detraccion, notaCredito, neto, lote, cargadoEn (quién cargó va solo en `lotes`: el
   proveedor puede ver su documento completo con F12).
-- `lotes/{lote}`: lote, banco, fechaPago, facturas, proveedores, total, archivoTxt, archivoCsv, cargadoPor, cargadoEn.
+- `lotes/{lote}`: lote, banco, fechaPago, facturas, proveedores, total, archivoTxt, hashTxt (SHA-256 del TXT),
+  cargadoPor, cargadoEn.
+
+## Carga de TXT sin duplicar (carpeta completa)
+"Cargar lotes" acepta una carpeta (input `webkitdirectory` o arrastrarla; entra en subcarpetas) o varios
+TXT + CSV a la vez (los CSV se juntan en un solo mapa de descuentos). No se duplica nunca:
+1. Cada pago tiene id `RUC_FACTURA_AAAAMMDD` y se guarda con `merge` → volver a cargarlo lo actualiza.
+2. Cada lote guarda `hashTxt`: un TXT con la misma huella (aunque tenga otro nombre) sale "Ya cargado ·
+   se omite"; uno con el mismo id de lote pero otro contenido, "Ya cargado · cambió" (se actualiza); copias
+   dentro de la misma selección, "Repetido". Solo se marcan para cargar los nuevos y los que cambiaron.
+   Lotes viejos sin `hashTxt` se comparan por facturas + total.
 - `intentos_login/{email}`: solo Cloud Functions.
 
 ## Autenticación

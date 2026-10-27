@@ -6,7 +6,7 @@
    ══════════════════════════════════════════════════════════════════ */
 import { db, crearUsuario, restablecerClave } from "./firebase.js";
 import {
-  collection, query, where, orderBy, getDocs, getDoc, doc, setDoc, updateDoc,
+  collection, query, where, orderBy, limit, getDocs, getDoc, doc, setDoc, updateDoc,
   writeBatch, serverTimestamp, sum,
 } from "https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore.js";
 import {
@@ -15,7 +15,7 @@ import {
   paginador,
 } from "./util.js";
 import { ROLES_INTERNOS, etiquetaRol, puedeGestionar } from "./roles.js";
-import { leerArchivo, interpretarLote } from "./bcp.js";
+import { leerArchivo, interpretarLote, leerDescuentos, huellaArchivo } from "./bcp.js";
 import { constancia } from "./vista-proveedor.js";
 import { paginaServidor } from "./paginaServidor.js";
 import { DOMINIO_PROVEEDORES } from "./config.js";
@@ -23,7 +23,7 @@ import { DOMINIO_PROVEEDORES } from "./config.js";
 export function pestanas(rol) {
   return [
     { id: "pagos", texto: "Pagos", icono: "recibo" },
-    ...(puedeGestionar(rol) ? [{ id: "cargar", texto: "Cargar lote", icono: "subir" }] : []),
+    ...(puedeGestionar(rol) ? [{ id: "cargar", texto: "Cargar lotes", icono: "subir" }] : []),
     { id: "lotes", texto: "Lotes", icono: "capas" },
     { id: "proveedores", texto: "Proveedores", icono: "edificio" },
     ...(rol === "admin" ? [{ id: "usuarios", texto: "Usuarios", icono: "usuarios" }] : []),
@@ -223,119 +223,257 @@ function vistaPagos(cont, ctx) {
 function vistaCargar(cont, ctx) {
   cont.innerHTML = `
     <div class="panel">
-      <div class="panel-titulo"><div><h2>Cargar lote de pagos</h2>
-        <p>Sube el TXT de Pago a Proveedores de Telecrédito BCP y, si lo tienes, el CSV de descuentos de SAP B1. Primero verás una vista previa; nada se guarda hasta que confirmes.</p></div></div>
-      <div class="grilla-2">
-        ${zona("txt", "Archivo TXT del banco", "PROV_AAAAMMDD.txt · obligatorio", ".txt,text/plain")}
-        ${zona("csv", "CSV de descuentos (SAP B1)", "factura;ruc;bruto;retencion;detraccion;notaCredito · opcional", ".csv,text/csv")}
+      <div class="panel-titulo"><div><h2>Cargar lotes de pagos</h2>
+        <p>Sube <b>la carpeta completa</b> o varios TXT de Pago a Proveedores de Telecrédito BCP (y, si los tienes, los CSV de descuentos de SAP B1).
+        Los archivos ya cargados se reconocen solos —aunque cambies su nombre— y no se vuelven a cargar. Nada se guarda hasta que confirmes.</p></div></div>
+      <div class="zona-archivo" id="zona">
+        ${icono("subir")}<b>Arrastra aquí la carpeta o los archivos</b>
+        <small>TXT del banco (obligatorio) · CSV de descuentos de SAP: factura;ruc;bruto;retencion;detraccion;notaCredito (opcional)</small>
+        <span class="acciones" style="margin-top:6px">
+          <button type="button" class="btn chico oscuro" id="btn-carpeta">${icono("capas")}Elegir carpeta</button>
+          <button type="button" class="btn chico" id="btn-archivos">${icono("archivo")}Elegir archivos</button>
+        </span>
+        <span class="nombre-archivo" id="resumen-archivos"></span>
+        <input type="file" id="in-carpeta" webkitdirectory directory multiple class="sr-only">
+        <input type="file" id="in-archivos" accept=".txt,.csv,text/plain,text/csv" multiple class="sr-only">
       </div>
-      <div class="acciones" style="margin-top:12px"><button type="button" class="btn oscuro" id="interpretar" disabled>${icono("buscar")}Ver vista previa</button></div>
     </div>
     <div id="vista-previa"></div>`;
 
-  const archivos = { txt: null, csv: null };
-  for (const tipo of ["txt", "csv"]) {
-    const z = $(`#zona-${tipo}`, cont), inp = $(`#arch-${tipo}`, cont);
-    const poner = (f) => {
-      archivos[tipo] = f || null;
-      $(`#nombre-${tipo}`, cont).textContent = f ? `${f.name} · ${(f.size / 1024).toFixed(1)} KB` : "";
-      $("#interpretar", cont).disabled = !archivos.txt;
-      $("#vista-previa", cont).innerHTML = "";
-    };
-    inp.addEventListener("change", () => poner(inp.files[0]));
-    z.addEventListener("dragover", (e) => { e.preventDefault(); z.classList.add("sobre"); });
-    z.addEventListener("dragleave", () => z.classList.remove("sobre"));
-    z.addEventListener("drop", (e) => { e.preventDefault(); z.classList.remove("sobre"); poner(e.dataTransfer.files[0]); });
-  }
-
-  $("#interpretar", cont).addEventListener("click", async () => {
-    try {
-      const [txt, csv] = await Promise.all([leerArchivo(archivos.txt), archivos.csv ? leerArchivo(archivos.csv) : ""]);
-      const r = interpretarLote(txt, archivos.txt.name, csv);
-      const [loteExiste, cuentas] = await Promise.all([
-        getDoc(doc(db, "lotes", r.lote)).then((s) => s.exists()).catch(() => false),
-        rucsConCuenta([...new Set(r.pagos.map((x) => x.ruc))]).catch(() => new Set()),
-      ]);
-      vistaPrevia(r, loteExiste, cuentas, archivos);
-    } catch (err) {
-      console.error("Portal: no se pudo interpretar el lote", err);
-      $("#vista-previa", cont).innerHTML = `<div class="aviso rojo">No se pudo leer el archivo: ${esc(err.message)}</div>`;
-    }
+  let txts = [], csvs = [];
+  const zonaEl = $("#zona", cont);
+  $("#btn-carpeta", cont).addEventListener("click", () => $("#in-carpeta", cont).click());
+  $("#btn-archivos", cont).addEventListener("click", () => $("#in-archivos", cont).click());
+  $("#in-carpeta", cont).addEventListener("change", (e) => recibir([...e.target.files]));
+  $("#in-archivos", cont).addEventListener("change", (e) => recibir([...e.target.files]));
+  zonaEl.addEventListener("dragover", (e) => { e.preventDefault(); zonaEl.classList.add("sobre"); });
+  zonaEl.addEventListener("dragleave", () => zonaEl.classList.remove("sobre"));
+  zonaEl.addEventListener("drop", async (e) => {
+    e.preventDefault();
+    zonaEl.classList.remove("sobre");
+    recibir(await archivosSoltados(e.dataTransfer));
   });
 
-  function vistaPrevia(r, loteExiste, cuentas, archs) {
-    const sinCuenta = [...new Map(r.pagos.filter((x) => !cuentas.has(x.ruc)).map((x) => [x.ruc, x])).values()];
+  function recibir(lista) {
+    // Sin la extensión, así "PROV_20261020" va antes que "PROV_20261020_copia" (si son iguales, se queda el original).
+    const base = (f) => f.name.replace(/\.txt$/i, "");
+    txts = lista.filter((f) => /\.txt$/i.test(f.name)).sort((a, b) => base(a).localeCompare(base(b), "es", { numeric: true }));
+    csvs = lista.filter((f) => /\.csv$/i.test(f.name));
+    const otros = lista.length - txts.length - csvs.length;
+    $("#resumen-archivos", cont).textContent = txts.length
+      ? `${txts.length} TXT${csvs.length ? ` · ${csvs.length} CSV de descuentos` : ""}${otros ? ` · ${otros} archivo(s) que no son TXT ni CSV se ignoran` : ""}`
+      : lista.length ? "No hay archivos .txt en lo que elegiste." : "";
+    $("#vista-previa", cont).innerHTML = "";
+    if (txts.length) analizar();
+  }
+
+  /* Analiza cada TXT y decide su estado contra lo ya cargado:
+     nuevo · ya cargado igual (se omite) · ya cargado con cambios (se actualiza) · repetido en la selección. */
+  async function analizar() {
+    const caja = $("#vista-previa", cont);
+    caja.innerHTML = `<div class="panel"><p class="ayuda" style="margin:0">Revisando ${txts.length} archivo(s)…</p></div>`;
+    try {
+      const desc = {};
+      for (const f of csvs) Object.assign(desc, leerDescuentos(await leerArchivo(f)));
+      const lotes = [];
+      const vistos = new Map(); // huella → nombre del primer archivo con ese contenido
+      for (const f of txts) {
+        const [texto, huella] = await Promise.all([leerArchivo(f), huellaArchivo(f)]);
+        const r = interpretarLote(texto, f.name, desc);
+        const item = { file: f, r, huella, estado: "nuevo", detalle: "", incluir: true };
+        if (vistos.has(huella)) { item.estado = "repetido"; item.detalle = `mismo contenido que ${vistos.get(huella)}`; item.incluir = false; }
+        else if (lotes.some((x) => x.r.lote === r.lote)) { item.estado = "repetido"; item.detalle = "otro archivo con el mismo nombre y fecha"; item.incluir = false; }
+        vistos.set(huella, f.name);
+        lotes.push(item);
+      }
+      // Contra lo ya cargado: por la huella (aunque el archivo tenga otro nombre) y por el id del lote.
+      await Promise.all(lotes.filter((x) => x.estado === "nuevo").map(async (x) => {
+        const [porHuella, porId] = await Promise.all([
+          getDocs(query(collection(db, "lotes"), where("hashTxt", "==", x.huella), limit(1))),
+          getDoc(doc(db, "lotes", x.r.lote)),
+        ]);
+        if (!porHuella.empty) {
+          x.estado = "igual"; x.incluir = false;
+          x.detalle = porHuella.docs[0].id === x.r.lote ? "" : `cargado antes como ${porHuella.docs[0].id}`;
+        } else if (porId.exists()) {
+          const d = porId.data();
+          const mismo = !d.hashTxt && d.facturas === x.r.pagos.length && Math.abs((d.total || 0) - x.r.total) < 0.005;
+          x.estado = mismo ? "igual" : "cambio"; x.incluir = !mismo;
+        }
+      }));
+      const rucs = [...new Set(lotes.filter((x) => x.estado !== "repetido").flatMap((x) => x.r.pagos.map((p) => p.ruc)))];
+      const cuentas = await rucsConCuenta(rucs).catch(() => new Set());
+      vistaLotesPrevia(lotes, cuentas, csvs.length > 0);
+    } catch (err) {
+      console.error("Portal: no se pudieron revisar los archivos", err);
+      caja.innerHTML = `<div class="aviso rojo">No se pudieron leer los archivos: ${esc(err.message)}</div>`;
+    }
+  }
+
+  const ETIQUETA = {
+    nuevo: `<span class="etiqueta-estado activo">Nuevo</span>`,
+    cambio: `<span class="etiqueta-estado pendiente">Ya cargado · cambió</span>`,
+    igual: `<span class="etiqueta-estado neutro">Ya cargado · se omite</span>`,
+    repetido: `<span class="etiqueta-estado inactivo">Repetido · se omite</span>`,
+  };
+
+  function vistaLotesPrevia(lotes, cuentas, hayCsv) {
     const caja = $("#vista-previa", cont);
     caja.innerHTML = `
-      <div class="tarjetas">
-        <div class="tarjeta destacada"><div class="etiqueta">Total del lote</div><div class="valor">${solesS(r.total)}</div><div class="sub">abonado el ${fechaCorta(r.fechaPago)}</div></div>
-        <div class="tarjeta"><div class="etiqueta">Facturas</div><div class="valor">${r.pagos.length}</div><div class="sub">${r.proveedores} proveedor${r.proveedores === 1 ? "" : "es"}</div></div>
-        <div class="tarjeta"><div class="etiqueta">Lote</div><div class="valor" style="font-size:14px">${esc(r.lote)}</div><div class="sub">${loteExiste ? "Ya cargado antes: se actualizará" : "Lote nuevo"}</div></div>
-        <div class="tarjeta"><div class="etiqueta">Sin cuenta en el portal</div><div class="valor">${sinCuenta.length}</div><div class="sub">proveedores que aún no pueden consultar</div></div>
-      </div>
-      ${loteExiste ? `<div class="aviso amarillo">Este lote ya se cargó antes. Si confirmas, se actualizarán los mismos registros (no se duplican).</div>` : ""}
-      ${r.avisos.length ? `<div class="aviso amarillo"><b>Revisa antes de confirmar (${r.avisos.length}):</b><ul>${r.avisos.slice(0, 15).map((a) => `<li>${esc(a)}</li>`).join("")}${r.avisos.length > 15 ? `<li>…y ${r.avisos.length - 15} más</li>` : ""}</ul></div>` : ""}
+      <div class="tarjetas" id="kpis-carga"></div>
+      ${hayCsv ? "" : `<div class="aviso azul">No subiste CSV de descuentos: cada factura se guarda con el importe abonado como bruto (sin retención ni detracción).</div>`}
       <div class="panel">
-        <div class="panel-titulo"><div><h2>Vista previa</h2><p>Así lo verá cada proveedor en el portal.</p></div>
-          <div class="acciones"><button type="button" class="btn oscuro" id="confirmar" ${r.pagos.length ? "" : "disabled"}>${icono("check")}Confirmar carga</button></div></div>
+        <div class="panel-titulo"><div><h2>Archivos</h2><p>Marca los que quieres cargar. Toca un archivo para ver sus facturas.</p></div>
+          <div class="acciones"><button type="button" class="btn oscuro" id="confirmar">${icono("check")}Cargar</button></div></div>
         <div class="tabla-caja"><table>
-          <thead><tr><th>RUC</th><th>Razón social</th><th>Factura</th><th>Cuenta abono</th><th class="num">Bruto</th><th class="num">Retención</th>
-            <th class="num">Detracción</th><th class="num">N. crédito</th><th class="num">Neto</th><th>Portal</th></tr></thead>
-          <tbody id="tb-previa"></tbody>
-          <tfoot><tr><td colspan="8">Total (${r.pagos.length})</td><td class="num">${soles(r.total)}</td><td></td></tr></tfoot>
+          <thead><tr><th><input type="checkbox" id="todos" title="Marcar todos los que se pueden cargar"></th><th>Archivo</th><th>Fecha de abono</th><th class="num">Facturas</th>
+            <th class="num">Proveedores</th><th class="num">Total</th><th>Avisos</th><th>Estado</th></tr></thead>
+          <tbody id="tb-lotes"></tbody>
         </table></div>
-        <div id="pag-previa"></div>
+        <div id="pag-lotes"></div>
       </div>`;
-    const pag = paginador("adm-previa", pintarPrevia, { etiqueta: "facturas" });
-    pag.enganchar($("#pag-previa", caja));
-    function pintarPrevia() {
-      const { visibles, html } = pag.cortar(r.pagos);
-      $("#pag-previa", caja).innerHTML = html;
-      $("#tb-previa", caja).innerHTML = visibles.map((x) => `<tr>
-        <td class="mono">${esc(x.ruc)}</td><td>${esc(x.razonSocial)}</td><td class="mono">${esc(x.factura)}</td><td class="mono">${esc(x.cuentaAbono)}</td>
-        <td class="num">${soles(x.bruto)}</td><td class="num">${soles(x.retencion)}</td><td class="num">${soles(x.detraccion)}</td>
-        <td class="num">${soles(x.notaCredito)}</td><td class="num neto">${soles(x.neto)}</td>
-        <td>${cuentas.has(x.ruc) ? `<span class="etiqueta-estado activo">Con cuenta</span>`
-          : `<button type="button" class="btn chico" data-crear="${esc(x.ruc)}" data-razon="${esc(x.razonSocial)}">${icono("mas")}Crear cuenta</button>`}</td>
-      </tr>`).join("") || `<tr><td colspan="10" class="vacio">El archivo no tiene pagos.</td></tr>`;
+    const pag = paginador("adm-carga", pintar, { etiqueta: "archivos" });
+    pag.enganchar($("#pag-lotes", caja));
+    const cargables = lotes.filter((x) => x.estado === "nuevo" || x.estado === "cambio");
+    function resumen() {
+      const sel = lotes.filter((x) => x.incluir);
+      const facturas = sel.reduce((s, x) => s + x.r.pagos.length, 0);
+      const total = sel.reduce((s, x) => s + x.r.total, 0);
+      const sinCuenta = new Set(sel.flatMap((x) => x.r.pagos.map((p) => p.ruc)).filter((r) => !cuentas.has(r))).size;
+      const cuantos = (e) => lotes.filter((x) => x.estado === e).length;
+      $("#kpis-carga", caja).innerHTML = `
+        <div class="tarjeta destacada"><div class="etiqueta">Por cargar</div><div class="valor">${solesS(total)}</div><div class="sub">${sel.length} archivo(s) · ${facturas.toLocaleString("es-PE")} facturas</div></div>
+        <div class="tarjeta"><div class="etiqueta">Archivos nuevos</div><div class="valor">${cuantos("nuevo")}</div><div class="sub">${cuantos("cambio")} ya cargados con cambios</div></div>
+        <div class="tarjeta"><div class="etiqueta">Se omiten</div><div class="valor">${cuantos("igual") + cuantos("repetido")}</div><div class="sub">ya cargados o repetidos: no se duplican</div></div>
+        <div class="tarjeta"><div class="etiqueta">Sin cuenta en el portal</div><div class="valor">${sinCuenta}</div><div class="sub">proveedores de lo marcado</div></div>`;
+      $("#confirmar", caja).disabled = !sel.length;
+      $("#confirmar", caja).innerHTML = `${icono("check")}Cargar ${sel.length} archivo${sel.length === 1 ? "" : "s"}`;
+      $("#todos", caja).checked = cargables.length > 0 && cargables.every((x) => x.incluir);
     }
-    pintarPrevia();
-    $("#tb-previa", caja).addEventListener("click", (e) => {
-      const b = e.target.closest("[data-crear]");
-      if (b) modalProveedor(ctx, { ruc: b.dataset.crear, razonSocial: b.dataset.razon }, () => { cuentas.add(b.dataset.crear); pintarPrevia(); });
+    function pintar() {
+      const { visibles, inicio, html } = pag.cortar(lotes);
+      $("#pag-lotes", caja).innerHTML = html;
+      $("#tb-lotes", caja).innerHTML = visibles.map((x, i) => {
+        const k = inicio + i, puede = x.estado === "nuevo" || x.estado === "cambio";
+        return `<tr class="clic" data-k="${k}">
+          <td><input type="checkbox" data-incluir="${k}" ${x.incluir ? "checked" : ""} ${puede ? "" : "disabled"}></td>
+          <td style="font-size:11.5px"><b>${esc(x.file.name)}</b><br><span class="mono" style="color:var(--gris);font-size:10px">${esc(x.r.lote)}</span></td>
+          <td>${fechaCorta(x.r.fechaPago)}</td><td class="num">${x.r.pagos.length}</td><td class="num">${x.r.proveedores}</td>
+          <td class="num neto">${soles(x.r.total)}</td>
+          <td>${x.r.avisos.length ? `<span class="etiqueta-estado pendiente" title="${esc(x.r.avisos.slice(0, 5).join(" · "))}">${x.r.avisos.length}</span>` : "—"}</td>
+          <td>${ETIQUETA[x.estado]}${x.detalle ? `<br><small style="color:var(--gris)">${esc(x.detalle)}</small>` : ""}</td>
+        </tr>`;
+      }).join("");
+      resumen();
+    }
+    pintar();
+    $("#todos", caja).addEventListener("change", (e) => { cargables.forEach((x) => { x.incluir = e.target.checked; }); pintar(); });
+    $("#tb-lotes", caja).addEventListener("change", (e) => {
+      const c = e.target.closest("[data-incluir]");
+      if (c) { lotes[Number(c.dataset.incluir)].incluir = c.checked; resumen(); }
+    });
+    $("#tb-lotes", caja).addEventListener("click", (e) => {
+      if (e.target.closest("input")) return;
+      const tr = e.target.closest("tr[data-k]");
+      if (tr) detalleLote(lotes[Number(tr.dataset.k)], cuentas);
     });
 
     $("#confirmar", caja).addEventListener("click", async () => {
-      const ok = await confirmar({ titulo: "Confirmar carga", textoOk: "Cargar lote",
-        mensaje: `Se publicarán ${r.pagos.length} facturas por ${solesS(r.total)} (lote ${r.lote}). Los proveedores las verán de inmediato.` });
+      const sel = lotes.filter((x) => x.incluir);
+      const facturas = sel.reduce((s, x) => s + x.r.pagos.length, 0);
+      const ok = await confirmar({ titulo: "Confirmar carga", textoOk: "Cargar",
+        mensaje: `Se publicarán ${facturas.toLocaleString("es-PE")} facturas de ${sel.length} archivo(s) por ${solesS(sel.reduce((s, x) => s + x.r.total, 0))}. Los proveedores las verán de inmediato. Los pagos que ya estaban se actualizan, no se duplican.` });
       if (!ok) return;
       const btn = $("#confirmar", caja);
       btn.disabled = true;
+      let hechos = 0;
       try {
-        for (let i = 0; i < r.pagos.length; i += 450) {
-          const batch = writeBatch(db);
-          for (const { id, ...datos } of r.pagos.slice(i, i + 450)) {
-            // Quién cargó queda solo en "lotes": el proveedor lee su pago completo (F12) y no necesita nombres internos.
-            batch.set(doc(db, "pagos", id), { ...datos, cargadoEn: serverTimestamp() }, { merge: true });
-          }
-          btn.textContent = `Guardando ${Math.min(i + 450, r.pagos.length)} de ${r.pagos.length}…`;
-          await batch.commit();
+        for (const x of sel) {
+          btn.textContent = `Archivo ${hechos + 1} de ${sel.length}…`;
+          await guardarLote(x, ctx);
+          x.estado = "igual"; x.incluir = false; x.detalle = "cargado ahora";
+          hechos++;
         }
-        await setDoc(doc(db, "lotes", r.lote), {
-          lote: r.lote, banco: "BCP", fechaPago: r.fechaPago, facturas: r.pagos.length, proveedores: r.proveedores, total: r.total,
-          archivoTxt: archs.txt.name, archivoCsv: archs.csv?.name || "", cargadoPor: quien(ctx), cargadoEn: serverTimestamp(),
-        });
-        notificar(`Lote cargado: ${r.pagos.length} facturas`);
+        notificar(`${hechos} archivo(s) cargados`);
         ctx.irA("lotes");
       } catch (err) {
-        console.error("Portal: falló la carga del lote", err);
+        console.error("Portal: falló la carga", err);
+        pintar();
         btn.disabled = false;
-        btn.innerHTML = `${icono("check")}Reintentar carga`;
-        notificar("No se pudo completar la carga", "error");
+        notificar(`Se cargaron ${hechos} de ${sel.length}. Falló ${sel[hechos]?.file.name || ""}: vuelve a intentar (no se duplica).`, "error");
       }
     });
   }
+
+  /** Detalle de las facturas de un archivo (paginado), con "Crear cuenta" para quien no tiene. */
+  function detalleLote(x, cuentas) {
+    const { el } = abrirModal(`
+      <div class="modal-cab"><h2>${esc(x.file.name)}</h2><button type="button" class="cerrar" data-cerrar aria-label="Cerrar">${icono("x")}</button></div>
+      <p class="modal-sub">Lote ${esc(x.r.lote)} · abonado el ${fechaCorta(x.r.fechaPago)} · ${x.r.pagos.length} facturas · ${solesS(x.r.total)}</p>
+      ${x.r.avisos.length ? `<div class="aviso amarillo"><b>Avisos (${x.r.avisos.length}):</b><ul>${x.r.avisos.slice(0, 10).map((a) => `<li>${esc(a)}</li>`).join("")}${x.r.avisos.length > 10 ? `<li>…y ${x.r.avisos.length - 10} más</li>` : ""}</ul></div>` : ""}
+      <div class="tabla-caja"><table>
+        <thead><tr><th>RUC</th><th>Razón social</th><th>Factura</th><th class="num">Bruto</th><th class="num">Ret.</th><th class="num">Detr.</th><th class="num">N.C.</th><th class="num">Neto</th><th>Portal</th></tr></thead>
+        <tbody id="tb-det"></tbody>
+      </table></div>
+      <div id="pag-det"></div>
+      <div class="modal-pie"><button type="button" class="btn oscuro" data-cerrar>Cerrar</button></div>`, { ancho: true });
+    el.querySelector(".modal").style.maxWidth = "980px";
+    const pag = paginador("adm-carga-detalle", pintar, { etiqueta: "facturas" });
+    pag.enganchar($("#pag-det", el));
+    function pintar() {
+      const { visibles, html } = pag.cortar(x.r.pagos);
+      $("#pag-det", el).innerHTML = html;
+      $("#tb-det", el).innerHTML = visibles.map((p) => `<tr>
+        <td class="mono">${esc(p.ruc)}</td><td>${esc(p.razonSocial)}</td><td class="mono">${esc(p.factura)}</td>
+        <td class="num">${soles(p.bruto)}</td><td class="num">${soles(p.retencion)}</td><td class="num">${soles(p.detraccion)}</td>
+        <td class="num">${soles(p.notaCredito)}</td><td class="num neto">${soles(p.neto)}</td>
+        <td>${cuentas.has(p.ruc) ? `<span class="etiqueta-estado activo">Con cuenta</span>`
+          : `<button type="button" class="btn chico" data-crear="${esc(p.ruc)}" data-razon="${esc(p.razonSocial)}">${icono("mas")}Crear cuenta</button>`}</td>
+      </tr>`).join("") || `<tr><td colspan="9" class="vacio">El archivo no tiene pagos.</td></tr>`;
+    }
+    pintar();
+    $("#tb-det", el).addEventListener("click", (e) => {
+      const b = e.target.closest("[data-crear]");
+      if (b) modalProveedor(ctx, { ruc: b.dataset.crear, razonSocial: b.dataset.razon }, () => { cuentas.add(b.dataset.crear); pintar(); });
+    });
+  }
 }
+
+/** Guarda un lote: pagos en tandas de 450 (id = RUC_FACTURA_FECHA, así nunca se duplican) y su registro con la huella. */
+async function guardarLote(x, ctx) {
+  const { r, file, huella } = x;
+  for (let i = 0; i < r.pagos.length; i += 450) {
+    const batch = writeBatch(db);
+    for (const { id, ...datos } of r.pagos.slice(i, i + 450)) {
+      // Quién cargó queda solo en "lotes": el proveedor lee su pago completo (F12) y no necesita nombres internos.
+      batch.set(doc(db, "pagos", id), { ...datos, cargadoEn: serverTimestamp() }, { merge: true });
+    }
+    await batch.commit();
+  }
+  await setDoc(doc(db, "lotes", r.lote), {
+    lote: r.lote, banco: "BCP", fechaPago: r.fechaPago, facturas: r.pagos.length, proveedores: r.proveedores, total: r.total,
+    archivoTxt: file.webkitRelativePath || file.name, hashTxt: huella, cargadoPor: quien(ctx), cargadoEn: serverTimestamp(),
+  });
+}
+
+/** Archivos de lo que se suelta en la zona: entra también en las carpetas (y sus subcarpetas). */
+async function archivosSoltados(dt) {
+  const entradas = [...(dt.items || [])].map((it) => it.webkitGetAsEntry && it.webkitGetAsEntry()).filter(Boolean);
+  if (!entradas.length) return [...dt.files];
+  const salida = [];
+  const leerCarpeta = (dir) => new Promise((ok) => {
+    const lector = dir.createReader(), todas = [];
+    const tanda = () => lector.readEntries((es) => { if (!es.length) return ok(todas); todas.push(...es); tanda(); }, () => ok(todas));
+    tanda();
+  });
+  async function recorrer(e) {
+    if (e.isFile) salida.push(await new Promise((ok, mal) => e.file(ok, mal)));
+    else if (e.isDirectory) for (const h of await leerCarpeta(e)) await recorrer(h);
+  }
+  for (const e of entradas) await recorrer(e);
+  return salida;
+}
+
 /** RUC (de la lista dada) que ya tienen cuenta de proveedor: lee solo esos, de 30 en 30. */
 async function rucsConCuenta(rucs) {
   const con = new Set();
@@ -345,13 +483,6 @@ async function rucsConCuenta(rucs) {
   }
   return con;
 }
-const zona = (tipo, titulo, ayuda, accept) => `
-  <label class="zona-archivo" id="zona-${tipo}">
-    ${icono("subir")}<b>${titulo}</b><small>${ayuda}</small><small>Arrastra el archivo aquí o haz clic para elegirlo</small>
-    <span class="nombre-archivo" id="nombre-${tipo}"></span>
-    <input type="file" id="arch-${tipo}" accept="${accept}" class="sr-only">
-  </label>`;
-
 /* ══════════════════════════════════════════════════════════════════
    LOTES — historial de cargas
    ══════════════════════════════════════════════════════════════════ */
