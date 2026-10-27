@@ -37,12 +37,18 @@ export function paginaServidor({ clave, etiqueta = "registros", barra, consulta,
     if (!c) return;
     const cursor = st.cursores[st.pagina - 1];
     try {
-      const [snap, agg] = await Promise.all([
+      const base = query(c.col, ...c.filtros);
+      // El conteo va aparte de las sumas: si una suma falla (p. ej. un índice que Firebase aún está
+      // creando), la tabla y el total de registros se muestran igual y las sumas salen "—".
+      const [snap, cuenta, sumas] = await Promise.all([
         getDocs(query(c.col, ...c.filtros, ...c.orden, ...(cursor ? [startAfter(cursor)] : []), limit(st.tam))),
-        recontar ? agregar(query(c.col, ...c.filtros), { total: count(), ...agregados }) : null,
+        recontar ? agregar(base, { total: count() }) : null,
+        recontar && Object.keys(agregados).length
+          ? agregar(base, agregados).catch((err) => { console.warn("Portal: no se pudieron calcular las sumas", err); return null; })
+          : null,
       ]);
       if (!st.vivo || n !== st.pedido) return;
-      if (agg) { st.agg = agg; st.total = agg.total; }
+      if (cuenta) { st.total = cuenta.total; st.sumasOk = !!sumas || !Object.keys(agregados).length; st.agg = { total: cuenta.total, ...(sumas || {}) }; }
       // Si la página quedó vacía (se borró lo último), retrocede una.
       if (!snap.docs.length && st.pagina > 1) { st.pagina--; return cargar(false, false); }
       st.docs = snap.docs;
