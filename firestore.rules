@@ -37,10 +37,13 @@ service cloud.firestore {
       allow update: if (esAdmin() && !(propio(uid) && cambios().hasAny(['rol', 'activo'])))
         || (gestiona() && resource.data.rol == 'proveedor' && request.resource.data.rol == 'proveedor'
             && request.resource.data.ruc == resource.data.ruc)
-        // Cada quien solo puede marcar que ya cambió su clave y su último ingreso.
+        // Cada quien solo puede marcar que ya cambió su clave y su último ingreso
+        // (con la hora del servidor: nada de textos inventados desde F12).
         || (propio(uid)
             && cambios().hasOnly(['debeCambiarClave', 'claveCambiadaEn', 'ultimoIngreso'])
-            && (!cambios().hasAny(['debeCambiarClave']) || request.resource.data.debeCambiarClave == false));
+            && (!cambios().hasAny(['debeCambiarClave']) || request.resource.data.debeCambiarClave == false)
+            && (!cambios().hasAny(['claveCambiadaEn']) || request.resource.data.claveCambiadaEn == request.time)
+            && (!cambios().hasAny(['ultimoIngreso']) || request.resource.data.ultimoIngreso == request.time));
       allow delete: if esAdmin() && !propio(uid);
     }
 

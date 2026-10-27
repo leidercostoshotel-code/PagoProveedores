@@ -48,7 +48,7 @@ const MESES = ["ene", "feb", "mar", "abr", "may", "jun", "jul", "ago", "set", "o
 export const NOMBRES_MES = ["Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio", "Julio", "Agosto", "Setiembre", "Octubre", "Noviembre", "Diciembre"];
 /** "2026-10-24" → "24 oct 2026" */
 export function fechaCorta(iso) {
-  if (!iso || !/^\d{4}-\d{2}-\d{2}/.test(iso)) return iso || "—";
+  if (!iso || !/^\d{4}-\d{2}-\d{2}/.test(iso)) return esc(iso || "—");
   const [y, m, d] = iso.slice(0, 10).split("-");
   return `${d} ${MESES[Number(m) - 1]} ${y}`;
 }

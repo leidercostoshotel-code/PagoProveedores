@@ -18,6 +18,10 @@ del hotel administra todo desde el mismo portal. Login y estilo copiados de la s
 - `public/js/util.js` — íconos SVG, formato, modales, CSV, mensajes de error. `roles.js` — roles.
 - `functions/index.js` — `verificarBloqueoLogin`, `registrarIntentoFallido`, `limpiarIntentosLogin`, `restablecerClave` (plan Blaze, opcionales).
 - `firestore.rules` — roles con perfil en `usuarios/{uid}`; proveedor solo lee `pagos` con su `ruc`.
+- `pruebas/reglas.mjs` — 46 pruebas de seguridad de las reglas (lo que intentaría alguien con F12 en cada rol);
+  `npm install && npm run probar:reglas` (emulador, necesita Java). **Correrlas tras tocar `firestore.rules`.**
+- `firebase.json` — cabeceras de seguridad (CSP: scripts solo propios y de gstatic, datos solo a Google;
+  sin iframes ajenos; HSTS). Un script o servicio externo nuevo hay que sumarlo a la CSP.
 - `scripts/desplegar-cloudshell.sh` — despliegue desde Google Cloud Shell (una línea; nunca con `leitime`).
 - `.github/workflows/firebase-deploy.yml` — despliega Hosting, Firestore y Functions con secrets `FIREBASE_*`.
 
@@ -25,7 +29,8 @@ del hotel administra todo desde el mismo portal. Login y estilo copiados de la s
 - `usuarios/{uid}`: rol (admin|contabilidad|consulta|proveedor), activo, nombre, email, ruc y razonSocial
   (proveedor), contacto, telefono, debeCambiarClave, ultimoIngreso, creadoPor/creadoEn.
 - `pagos/{RUC_FACTURA_AAAAMMDD}`: ruc, razonSocial, factura, fechaPago (YYYY-MM-DD), banco, cuentaAbono,
-  bruto, retencion, detraccion, notaCredito, neto, lote, cargadoEn, cargadoPor.
+  bruto, retencion, detraccion, notaCredito, neto, lote, cargadoEn (quién cargó va solo en `lotes`: el
+  proveedor puede ver su documento completo con F12).
 - `lotes/{lote}`: lote, banco, fechaPago, facturas, proveedores, total, archivoTxt, archivoCsv, cargadoPor, cargadoEn.
 - `intentos_login/{email}`: solo Cloud Functions.
 
