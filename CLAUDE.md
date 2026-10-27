@@ -18,7 +18,12 @@ del hotel administra todo desde el mismo portal. Login y estilo copiados de la s
   Se revisa con la hora real cada segundo y al volver a la pestaña (cierra tras suspender la PC); la hora de
   ingreso va en sessionStorage, así recargar no reinicia el tope.
 - `public/js/vista-proveedor.js` / `vista-admin.js` — pestañas; cada una exporta `pestanas(rol)` y `montar(id, contenedor, ctx)` (devuelve función de limpieza).
-- `public/js/bcp.js` — lector del TXT Telecrédito BCP + CSV SAP en el navegador. **Mismas posiciones que `scripts/cargar-pagos-bcp.js`.**
+- `public/js/bcp.js` — lector del TXT Telecrédito BCP "Pago a Proveedores" (formato REAL, tomado de
+  `BCP_102026_01_20261015101650.txt`): encabezado `#1` (cuenta 5-24, moneda 25-26, total 27-41 con 2 dec.,
+  fecha DDMMAAAA 42-49, cantidad 85-90) y una línea ` 2` por comprobante (tipo cuenta 3, cuenta 4-23, nombre
+  24-63, moneda 64-65, importe 66-80, tipo doc 81-83, RUC 84-95, comprobante 96-106 p. ej. F00046937).
+  `integro` = total y cantidad del encabezado cuadran con el detalle (si no, el TXT queda "Revisar"). Cruza
+  con el CSV de SAP por factura exacta o por RUC + número sin serie ("F001-46937" ↔ "F00046937").
 - `public/js/util.js` — íconos SVG, formato, modales, CSV, mensajes de error. `roles.js` — roles.
 - `functions/index.js` — `verificarBloqueoLogin`, `registrarIntentoFallido`, `limpiarIntentosLogin`, `restablecerClave` (plan Blaze, opcionales).
 - `firestore.rules` — roles con perfil en `usuarios/{uid}`; proveedor solo lee `pagos` con su `ruc`.
@@ -66,7 +71,6 @@ RUC es público. El personal del hotel sí: clave inicial al azar y `debeCambiar
 admin se crea a mano en la consola (ver README).
 
 ## Pendientes conocidos
-- Ajustar posiciones de ancho fijo del TXT (en `public/js/bcp.js` y en el script) con un TXT real.
 - Posible soporte futuro para TXT de Interbank y BBVA.
 
 ## Flujo de trabajo (pedido del dueño)

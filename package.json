@@ -4,14 +4,10 @@
   "private": true,
   "description": "Portal de consulta de pagos para proveedores (Firebase Hosting + Firestore + Functions)",
   "scripts": {
-    "cargar": "node scripts/cargar-pagos-bcp.js",
     "servir": "npx --yes serve public -l 5000",
     "deploy": "firebase deploy --only hosting,firestore",
     "deploy:functions": "firebase deploy --only functions",
     "probar:reglas": "firebase emulators:exec --only firestore --project demo-portal \"node pruebas/reglas.mjs\""
-  },
-  "dependencies": {
-    "firebase-admin": "^12.6.0"
   },
   "devDependencies": {
     "@firebase/rules-unit-testing": "^5.0.2",
