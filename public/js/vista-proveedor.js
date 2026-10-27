@@ -58,7 +58,7 @@ function vistaPagos(cont, ctx, pagos) {
       </div>
       <div class="barra-filtros">
         <label class="campo"><span>Año</span><select class="select chico" id="f-anio">
-          <option value="">Todos</option>${anios.map((a) => `<option ${a === anioIni ? "selected" : ""}>${a}</option>`).join("")}
+          <option value="">Todos</option>${anios.map((a) => `<option ${a === anioIni ? "selected" : ""}>${esc(a)}</option>`).join("")}
         </select></label>
         <label class="campo"><span>Mes</span><select class="select chico" id="f-mes">
           <option value="">Todos</option>${NOMBRES_MES.map((m, i) => `<option value="${String(i + 1).padStart(2, "0")}">${m}</option>`).join("")}

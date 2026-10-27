@@ -271,7 +271,8 @@ function vistaCargar(cont, ctx) {
         for (let i = 0; i < r.pagos.length; i += 450) {
           const batch = writeBatch(db);
           for (const { id, ...datos } of r.pagos.slice(i, i + 450)) {
-            batch.set(doc(db, "pagos", id), { ...datos, cargadoEn: serverTimestamp(), cargadoPor: quien(ctx) }, { merge: true });
+            // Quién cargó queda solo en "lotes": el proveedor lee su pago completo (F12) y no necesita nombres internos.
+            batch.set(doc(db, "pagos", id), { ...datos, cargadoEn: serverTimestamp() }, { merge: true });
           }
           btn.textContent = `Guardando ${Math.min(i + 450, r.pagos.length)} de ${r.pagos.length}…`;
           await batch.commit();
