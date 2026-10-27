@@ -18,6 +18,15 @@
 import { query, getDocs, limit, startAfter, getAggregateFromServer, count } from "https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore.js";
 import { htmlPagina, leerTam, guardarTam } from "./util.js";
 
+/** Firestore acepta como máximo 5 cálculos (count/sum/average) por consulta de agregación:
+    se reparten en tandas de 5 y se juntan los resultados. */
+export async function agregar(q, specs) {
+  const pares = Object.entries(specs), tandas = [];
+  for (let i = 0; i < pares.length; i += 5) tandas.push(Object.fromEntries(pares.slice(i, i + 5)));
+  const res = await Promise.all(tandas.map((t) => getAggregateFromServer(q, t)));
+  return Object.assign({}, ...res.map((r) => r.data()));
+}
+
 export function paginaServidor({ clave, etiqueta = "registros", barra, consulta, agregados = {}, pintar, alError }) {
   const st = { pagina: 1, tam: leerTam(clave) || 25, cursores: [null], total: 0, agg: {}, docs: [], pedido: 0, vivo: true, inicio: 0 };
 
@@ -30,10 +39,10 @@ export function paginaServidor({ clave, etiqueta = "registros", barra, consulta,
     try {
       const [snap, agg] = await Promise.all([
         getDocs(query(c.col, ...c.filtros, ...c.orden, ...(cursor ? [startAfter(cursor)] : []), limit(st.tam))),
-        recontar ? getAggregateFromServer(query(c.col, ...c.filtros), { total: count(), ...agregados }) : null,
+        recontar ? agregar(query(c.col, ...c.filtros), { total: count(), ...agregados }) : null,
       ]);
       if (!st.vivo || n !== st.pedido) return;
-      if (agg) { st.agg = agg.data(); st.total = st.agg.total; }
+      if (agg) { st.agg = agg; st.total = agg.total; }
       // Si la página quedó vacía (se borró lo último), retrocede una.
       if (!snap.docs.length && st.pagina > 1) { st.pagina--; return cargar(false, false); }
       st.docs = snap.docs;
