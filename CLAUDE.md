@@ -88,7 +88,9 @@ máximo 5 cálculos por consulta de agregación** (con 6 da `invalid-argument`):
 que los reparte en tandas de 5.
 **`sum()` con filtros exige un índice compuesto por cada combinación** (campos del filtro… + el campo que
 se suma, todos ASC; si falta da `failed-precondition`): los de `pagos` ya están en `firestore.indexes.json`
-(filtros × bruto/retencion/detraccion/notaCredito/neto). Un filtro o una suma nueva suma sus índices.
+(filtros × bruto/retencion/detraccion/notaCredito/neto). OJO con el orden: solo fechas = (campo sumado,
+fechaPago), como lo pide Firebase; con igualdades = (igualdades…, fechaPago, campo sumado). La consola del
+SDK está en `setLogLevel("silent")` (firebase.js): los errores se muestran en pantalla, no en F12. Un filtro o una suma nueva suma sus índices.
 `paginaServidor` pide el conteo y las sumas por separado: si las sumas fallan (índice aún creándose tras
 publicar), la lista carga igual y los totales salen "—" (`st.sumasOk`).
 25/50/100 por página, se recuerda por lista; `cargar(true)` al cambiar filtros, `recargar()` tras editar.

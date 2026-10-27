@@ -171,11 +171,11 @@
       "queryScope": "COLLECTION",
       "fields": [
         {
-          "fieldPath": "fechaPago",
+          "fieldPath": "bruto",
           "order": "ASCENDING"
         },
         {
-          "fieldPath": "bruto",
+          "fieldPath": "fechaPago",
           "order": "ASCENDING"
         }
       ]
@@ -184,13 +184,13 @@
       "collectionGroup": "pagos",
       "queryScope": "COLLECTION",
       "fields": [
-        {
-          "fieldPath": "fechaPago",
-          "order": "ASCENDING"
-        },
         {
           "fieldPath": "retencion",
           "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "fechaPago",
+          "order": "ASCENDING"
         }
       ]
     },
@@ -198,13 +198,13 @@
       "collectionGroup": "pagos",
       "queryScope": "COLLECTION",
       "fields": [
-        {
-          "fieldPath": "fechaPago",
-          "order": "ASCENDING"
-        },
         {
           "fieldPath": "detraccion",
           "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "fechaPago",
+          "order": "ASCENDING"
         }
       ]
     },
@@ -212,13 +212,13 @@
       "collectionGroup": "pagos",
       "queryScope": "COLLECTION",
       "fields": [
-        {
-          "fieldPath": "fechaPago",
-          "order": "ASCENDING"
-        },
         {
           "fieldPath": "notaCredito",
           "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "fechaPago",
+          "order": "ASCENDING"
         }
       ]
     },
@@ -227,11 +227,11 @@
       "queryScope": "COLLECTION",
       "fields": [
         {
-          "fieldPath": "fechaPago",
+          "fieldPath": "neto",
           "order": "ASCENDING"
         },
         {
-          "fieldPath": "neto",
+          "fieldPath": "fechaPago",
           "order": "ASCENDING"
         }
       ]
