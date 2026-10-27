@@ -46,7 +46,8 @@ del hotel administra todo desde el mismo portal. Login y estilo copiados de la s
   bruto, retencion, detraccion, notaCredito, neto, lote, cargadoEn (quién cargó va solo en `lotes`: el
   proveedor puede ver su documento completo con F12).
 - `lotes/{lote}`: lote, banco, fechaPago, facturas, proveedores, total, archivoTxt, hashTxt (SHA-256 del TXT),
-  cargadoPor, cargadoEn.
+  resumenProveedores [{ruc, razonSocial, facturas, total}] (Lotes → "Proveedores"; un lote viejo sin él se
+  arma con sus pagos al abrirlo), cargadoPor, cargadoEn.
 
 ## Carga de TXT sin duplicar (carpeta completa)
 "Cargar lotes" acepta una carpeta (input `webkitdirectory` o arrastrarla; entra en subcarpetas) o varios
@@ -82,7 +83,9 @@ admin se crea a mano en la consola (ver README).
 ## Paginación obligatoria EN EL SERVIDOR (pedido del dueño)
 **Toda lista que se lee de Firestore va paginada en el servidor** con `paginaServidor()`
 (`public/js/paginaServidor.js`): `orden + limit + startAfter` para la página visible y el total —y las
-sumas que hagan falta— con `getAggregateFromServer` (count/sum), sin descargar los documentos.
+sumas que hagan falta— con `agregar()` (count/sum), sin descargar los documentos. **Firestore acepta como
+máximo 5 cálculos por consulta de agregación** (con 6 da `invalid-argument`): usar siempre `agregar()`,
+que los reparte en tandas de 5.
 25/50/100 por página, se recuerda por lista; `cargar(true)` al cambiar filtros, `recargar()` tras editar.
 - Admin: **Pagos** (fechas; o RUC + fechas; o razón social / factura / lote en todas las fechas, porque
   Firestore no combina dos rangos; totales de la consulta con sum), **Lotes**, **Proveedores** (búsqueda

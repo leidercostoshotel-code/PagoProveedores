@@ -6,13 +6,13 @@
    ══════════════════════════════════════════════════════════════════ */
 import { db } from "./firebase.js";
 import {
-  collection, query, where, orderBy, limit, getDocs, getAggregateFromServer, count, sum,
+  collection, query, where, orderBy, limit, getDocs, count, sum,
 } from "https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore.js";
 import {
   $, esc, icono, soles, solesS, fechaCorta, enmascarar, NOMBRES_MES,
   abrirModal, descargarCSV, notificar, confirmar,
 } from "./util.js";
-import { paginaServidor } from "./paginaServidor.js";
+import { paginaServidor, agregar } from "./paginaServidor.js";
 import { CORREO_CONTABILIDAD, EMPRESA } from "./config.js";
 
 export function pestanas() {
@@ -190,9 +190,9 @@ function vistaResumen(cont, ctx, { ultimo, primero }) {
     if (!anio) { $("#tb", cont).innerHTML = `<tr><td colspan="7" class="vacio">Aún no hay pagos registrados.</td></tr>`; return; }
     $("#tb", cont).innerHTML = `<tr><td colspan="7" class="vacio">Cargando…</td></tr>`;
     try {
-      const meses = await Promise.all(Array.from({ length: 12 }, (_, m) => getAggregateFromServer(
+      const meses = await Promise.all(Array.from({ length: 12 }, (_, m) => agregar(
         query(colPagos(), where("ruc", "==", ruc), where("fechaPago", ">=", `${anio}-${pad2(m + 1)}-01`), where("fechaPago", "<=", finMes(Number(anio), m + 1))),
-        { total: count(), ...SUMAS() }).then((r) => ({ mes: m, ...r.data() }))));
+        { total: count(), ...SUMAS() }).then((r) => ({ mes: m, ...r }))));
       if (!vivo || $("#f-anio", cont).value !== anio) return;
       const con = meses.filter((x) => x.total).reverse();
       const t = (k) => meses.reduce((s, x) => s + (Number(x[k]) || 0), 0);

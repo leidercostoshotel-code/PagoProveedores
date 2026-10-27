@@ -111,8 +111,8 @@ function vistaPagos(cont, ctx) {
         </div>
       </div>
       <form class="barra-filtros" id="filtros">
-        <label class="campo"><span>Desde</span><input class="input chico" type="date" id="f-desde" value="${p.lote ? "" : hace90}"></label>
-        <label class="campo"><span>Hasta</span><input class="input chico" type="date" id="f-hasta" value="${p.lote ? "" : hoyISO()}"></label>
+        <label class="campo"><span>Desde</span><input class="input chico" type="date" id="f-desde" value="${p.lote ? "" : p.fecha || hace90}"></label>
+        <label class="campo"><span>Hasta</span><input class="input chico" type="date" id="f-hasta" value="${p.lote ? "" : p.fecha || hoyISO()}"></label>
         <label class="campo"><span>Buscar por</span><select class="select chico" id="f-tipo">
           <option value="" ${tipoIni ? "" : "selected"}>Todas (por fechas)</option>
           <option value="ruc" ${tipoIni === "ruc" ? "selected" : ""}>RUC</option>
@@ -475,8 +475,67 @@ async function guardarLote(x, ctx) {
   }
   await setDoc(doc(db, "lotes", r.lote), {
     lote: r.lote, banco: "BCP", fechaPago: r.fechaPago, facturas: r.pagos.length, proveedores: r.proveedores, total: r.total,
+    resumenProveedores: resumirPorProveedor(r.pagos),
     archivoTxt: file.webkitRelativePath || file.name, hashTxt: huella, cargadoPor: quien(ctx), cargadoEn: serverTimestamp(),
   });
+}
+
+/** Proveedores de una lista de pagos: RUC, razón social, n.º de facturas y total (mayor primero). */
+function resumirPorProveedor(pagos) {
+  const m = new Map();
+  for (const p of pagos) {
+    const x = m.get(p.ruc) || { ruc: p.ruc, razonSocial: p.razonSocial, facturas: 0, total: 0 };
+    x.facturas++; x.total = Math.round((x.total + (Number(p.neto) || 0)) * 100) / 100;
+    m.set(p.ruc, x);
+  }
+  return [...m.values()].sort((a, b) => b.total - a.total);
+}
+
+/** Ventana con los proveedores que vinieron en un lote (paginada), con "Ver pagos" de cada uno. */
+async function proveedoresDelLote(id, ctx) {
+  const { el, cerrar } = abrirModal(`
+    <div class="modal-cab"><h2>Proveedores del lote</h2><button type="button" class="cerrar" data-cerrar aria-label="Cerrar">${icono("x")}</button></div>
+    <p class="modal-sub mono">${esc(id)}</p>
+    <div id="lp-cuerpo"><p class="ayuda">Cargando…</p></div>
+    <div class="modal-pie"><button type="button" class="btn oscuro" data-cerrar>Cerrar</button></div>`, { ancho: true });
+  el.querySelector(".modal").style.maxWidth = "860px";
+  try {
+    const lote = (await getDoc(doc(db, "lotes", id))).data() || {};
+    let lista = lote.resumenProveedores;
+    // Lotes cargados antes de guardar el resumen: se arma con sus pagos (una sola vez).
+    if (!Array.isArray(lista)) {
+      const snap = await getDocs(query(collection(db, "pagos"), where("lote", "==", id)));
+      lista = resumirPorProveedor(snap.docs.map((d) => d.data()));
+    }
+    const cuentas = await rucsConCuenta(lista.map((x) => x.ruc)).catch(() => new Set());
+    const cuerpo = $("#lp-cuerpo", el);
+    cuerpo.innerHTML = `
+      <p class="ayuda" style="margin:0 0 10px">Abonado el <b>${fechaCorta(lote.fechaPago)}</b> · ${lista.length} proveedor(es) · ${(lote.facturas ?? lista.reduce((s, x) => s + x.facturas, 0)).toLocaleString("es-PE")} facturas · <b>${solesS(lote.total ?? lista.reduce((s, x) => s + x.total, 0))}</b></p>
+      <div class="tabla-caja"><table>
+        <thead><tr><th>RUC</th><th>Razón social</th><th class="num">Facturas</th><th class="num">Total abonado</th><th>Portal</th><th></th></tr></thead>
+        <tbody id="lp-tb"></tbody>
+      </table></div>
+      <div id="lp-pag"></div>`;
+    const pag = paginador("adm-lote-proveedores", pintar, { etiqueta: "proveedores" });
+    pag.enganchar($("#lp-pag", el));
+    function pintar() {
+      const { visibles, html } = pag.cortar(lista);
+      $("#lp-pag", el).innerHTML = html;
+      $("#lp-tb", el).innerHTML = visibles.map((x) => `<tr>
+        <td class="mono">${esc(x.ruc)}</td><td>${esc(x.razonSocial)}</td><td class="num">${x.facturas}</td><td class="num neto">${soles(x.total)}</td>
+        <td>${cuentas.has(x.ruc) ? `<span class="etiqueta-estado activo">Con cuenta</span>` : `<span class="etiqueta-estado inactivo">Sin cuenta</span>`}</td>
+        <td><button type="button" class="btn chico" data-ruc="${esc(x.ruc)}">${icono("recibo")}Ver pagos</button></td>
+      </tr>`).join("") || `<tr><td colspan="6" class="vacio">El lote no tiene pagos.</td></tr>`;
+    }
+    pintar();
+    $("#lp-tb", el).addEventListener("click", (e) => {
+      const b = e.target.closest("[data-ruc]");
+      if (b) { cerrar(); ctx.irA("pagos", { ruc: b.dataset.ruc, fecha: lote.fechaPago }); }
+    });
+  } catch (err) {
+    console.error("Portal: no se pudieron leer los proveedores del lote", err);
+    $("#lp-cuerpo", el).innerHTML = `<div class="aviso rojo">No se pudieron leer los proveedores del lote (${esc(err.code || err.message)}).</div>`;
+  }
 }
 
 /** Archivos de lo que se suelta en la zona: entra también en las carpetas (y sus subcarpetas). */
@@ -513,7 +572,7 @@ function vistaLotes(cont, ctx) {
   const gestiona = puedeGestionar(ctx.perfil.rol);
   cont.innerHTML = `
     <div class="panel">
-      <div class="panel-titulo"><div><h2>Lotes cargados</h2><p>Del más reciente al más antiguo. "Ver pagos" muestra el detalle de cada lote.</p></div></div>
+      <div class="panel-titulo"><div><h2>Lotes cargados</h2><p>Del más reciente al más antiguo. "Proveedores" muestra quiénes vinieron en cada carga; "Ver pagos", sus facturas.</p></div></div>
       <div class="tabla-caja"><table>
         <thead><tr><th>Lote</th><th>Fecha de abono</th><th>Banco</th><th class="num">Facturas</th><th class="num">Proveedores</th>
           <th class="num">Total</th><th>Archivos</th><th>Cargado por</th><th></th></tr></thead>
@@ -533,14 +592,16 @@ function vistaLotes(cont, ctx) {
       <td class="num">${l.facturas ?? "—"}</td><td class="num">${l.proveedores ?? "—"}</td><td class="num neto">${soles(l.total)}</td>
       <td style="font-size:11px">${esc(l.archivoTxt || "")}${l.archivoCsv ? `<br>${esc(l.archivoCsv)}` : ""}</td>
       <td style="font-size:11px">${esc(l.cargadoPor || "")}<br><span style="color:var(--gris)">${fechaHora(l.cargadoEn)}</span></td>
-      <td><div class="acciones"><button type="button" class="btn chico" data-ver="${esc(d.id)}">${icono("recibo")}Ver pagos</button>
+      <td><div class="acciones"><button type="button" class="btn chico oscuro" data-prov="${esc(d.id)}">${icono("edificio")}Proveedores</button>
+        <button type="button" class="btn chico" data-ver="${esc(d.id)}">${icono("recibo")}Ver pagos</button>
         ${gestiona ? `<button type="button" class="btn chico rojo" data-borrar="${esc(d.id)}" data-n="${l.facturas || 0}">${icono("basura")}Eliminar</button>` : ""}</div></td>
     </tr>`; }).join("") || `<tr><td colspan="9" class="vacio">Aún no se ha cargado ningún lote.</td></tr>`;
   }
 
   $("#tb", cont).addEventListener("click", async (e) => {
-    const ver = e.target.closest("[data-ver]"), borrar = e.target.closest("[data-borrar]");
+    const ver = e.target.closest("[data-ver]"), borrar = e.target.closest("[data-borrar]"), prov = e.target.closest("[data-prov]");
     if (ver) ctx.irA("pagos", { lote: ver.dataset.ver });
+    if (prov) proveedoresDelLote(prov.dataset.prov, ctx);
     if (!borrar) return;
     const id = borrar.dataset.borrar;
     const ok = await confirmar({ titulo: "Eliminar lote", peligroso: true, textoOk: "Eliminar",
