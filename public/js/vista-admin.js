@@ -37,32 +37,33 @@ const sumar = (lista, k) => lista.reduce((s, p) => s + (Number(p[k]) || 0), 0);
 const quien = (ctx) => ctx.perfil.nombre || ctx.user.email;
 const estadoUsuario = (u) => !u.activo
   ? `<span class="etiqueta-estado inactivo">Inactivo</span>`
-  : u.debeCambiarClave ? `<span class="etiqueta-estado pendiente">Clave inicial</span>` : `<span class="etiqueta-estado activo">Activo</span>`;
+  : u.debeCambiarClave && u.rol !== "proveedor" ? `<span class="etiqueta-estado pendiente">Clave inicial</span>` : `<span class="etiqueta-estado activo">Activo</span>`;
 
 /** Muestra las credenciales recién creadas para entregarlas (solo se ven esta vez). */
-function modalCredenciales(titulo, usuario, clave) {
+function modalCredenciales(titulo, usuario, clave, { pideCambio = true } = {}) {
   const { el } = abrirModal(`
     <div class="modal-cab"><h2>${esc(titulo)}</h2><button type="button" class="cerrar" data-cerrar aria-label="Cerrar">${icono("x")}</button></div>
-    <p class="modal-sub">Entrega estos datos por un medio seguro. La clave solo se muestra ahora; al primer ingreso se le pedirá cambiarla.</p>
-    <div class="aviso azul"><div>Usuario: <b class="mono">${esc(usuario)}</b></div><div>Clave inicial: <b class="mono">${esc(clave)}</b></div></div>
+    <p class="modal-sub">Entrega estos datos por un medio seguro.${pideCambio ? " La clave solo se muestra ahora; al primer ingreso se le pedirá cambiarla." : ""}</p>
+    <div class="aviso azul"><div>Usuario: <b class="mono">${esc(usuario)}</b></div><div>Clave: <b class="mono">${esc(clave)}</b></div></div>
     <div class="modal-pie">
       <button type="button" class="btn" data-copiar>${icono("archivo")}Copiar</button>
       <button type="button" class="btn oscuro" data-cerrar>${icono("check")}Listo</button>
     </div>`);
   el.querySelector("[data-copiar]").addEventListener("click", () => {
-    navigator.clipboard?.writeText(`Portal de Proveedores\nUsuario: ${usuario}\nClave inicial: ${clave}\n${location.origin}`)
+    navigator.clipboard?.writeText(`Portal de Proveedores\nUsuario: ${usuario}\nClave: ${clave}\n${location.origin}`)
       .then(() => notificar("Copiado"), () => notificar("No se pudo copiar", "error"));
   });
 }
 
 /** Modal para restablecer la clave de otra cuenta (vía Cloud Function). */
 function modalRestablecer(u) {
+  const esProv = u.rol === "proveedor";
   const { el, cerrar } = abrirModal(`
     <form novalidate>
       <div class="modal-cab"><h2>Restablecer clave</h2><button type="button" class="cerrar" data-cerrar aria-label="Cerrar">${icono("x")}</button></div>
       <p class="modal-sub">${esc(u.razonSocial || u.nombre || "")} · ${esc(u.ruc || u.email)}</p>
-      <label class="campo"><span>Clave temporal</span>
-        <div style="display:flex;gap:6px"><input class="input mono" id="rc-clave" value="${generarClave()}" autocomplete="off">
+      <label class="campo"><span>${esProv ? "Clave nueva (por defecto su RUC)" : "Clave temporal"}</span>
+        <div style="display:flex;gap:6px"><input class="input mono" id="rc-clave" value="${esc(esProv ? u.ruc : generarClave())}" autocomplete="off">
         <button type="button" class="btn" id="rc-gen" title="Generar otra">${icono("dados")}</button></div></label>
       <p class="error" id="rc-error" hidden></p>
       <div class="modal-pie"><button type="button" class="btn" data-cerrar>Cancelar</button>
@@ -72,13 +73,13 @@ function modalRestablecer(u) {
   $("form", el).addEventListener("submit", async (e) => {
     e.preventDefault();
     const clave = $("#rc-clave", el).value.trim();
-    const v = validarClaveNueva(clave);
+    const v = esProv && clave === u.ruc ? "" : validarClaveNueva(clave);
     if (v) { $("#rc-error", el).textContent = v; $("#rc-error", el).hidden = false; return; }
     $("#rc-btn", el).disabled = true;
     try {
       await restablecerClave(u.uid, clave);
       cerrar();
-      modalCredenciales("Clave restablecida", u.ruc || u.email, clave);
+      modalCredenciales("Clave restablecida", u.ruc || u.email, clave, { pideCambio: !esProv });
     } catch (err) {
       console.error("Portal: no se pudo restablecer la clave", err);
       $("#rc-btn", el).disabled = false;
@@ -366,7 +367,7 @@ function vistaProveedores(cont, ctx) {
       <div class="barra-filtros">
         <label class="campo crece"><span>Buscar</span><input class="input chico" style="width:100%" id="f-buscar" placeholder="RUC, razón social o contacto"></label>
         <label class="campo"><span>Estado</span><select class="select chico" id="f-estado">
-          <option value="">Todos</option><option value="activo">Activos</option><option value="inactivo">Inactivos</option><option value="clave">Con clave inicial</option></select></label>
+          <option value="">Todos</option><option value="activo">Activos</option><option value="inactivo">Inactivos</option></select></label>
       </div>
       <div class="tabla-caja"><table>
         <thead><tr><th>RUC</th><th>Razón social</th><th>Contacto</th><th>Estado</th><th>Último ingreso</th><th>Alta</th><th></th></tr></thead>
@@ -377,7 +378,7 @@ function vistaProveedores(cont, ctx) {
   function pintar() {
     const t = normalizar($("#f-buscar", cont).value), est = $("#f-estado", cont).value;
     const filas = lista.filter((u) => (!t || [u.ruc, u.razonSocial, u.contacto, u.telefono].some((v) => normalizar(v).includes(t)))
-      && (!est || (est === "activo" ? u.activo : est === "inactivo" ? !u.activo : u.debeCambiarClave)));
+      && (!est || (est === "activo" ? u.activo : !u.activo)));
     $("#tb", cont).innerHTML = filas.map((u) => `<tr>
       <td class="mono">${esc(u.ruc)}</td><td>${esc(u.razonSocial)}</td>
       <td style="font-size:11px">${esc(u.contacto || "—")}${u.telefono ? `<br>${esc(u.telefono)}` : ""}</td>
@@ -398,8 +399,8 @@ function vistaProveedores(cont, ctx) {
   $("#f-estado", cont).addEventListener("change", pintar);
   $("#nuevo", cont)?.addEventListener("click", () => modalProveedor(ctx));
   $("#exportar", cont).addEventListener("click", () => descargarCSV(`proveedores_${hoyISO()}.csv`,
-    ["RUC", "Razón social", "Contacto", "Teléfono", "Activo", "Clave inicial pendiente", "Último ingreso"],
-    lista.map((u) => [u.ruc, u.razonSocial, u.contacto, u.telefono, u.activo ? "Sí" : "No", u.debeCambiarClave ? "Sí" : "No", fechaHora(u.ultimoIngreso)])));
+    ["RUC", "Razón social", "Contacto", "Teléfono", "Activo", "Último ingreso"],
+    lista.map((u) => [u.ruc, u.razonSocial, u.contacto, u.telefono, u.activo ? "Sí" : "No", fechaHora(u.ultimoIngreso)])));
   $("#tb", cont).addEventListener("click", async (e) => {
     const b = e.target.closest("[data-acc]");
     if (!b) return;
@@ -421,25 +422,31 @@ function vistaProveedores(cont, ctx) {
 /** Alta (sin uid) o edición (con uid) de un proveedor. `alCrear` se llama tras un alta exitosa. */
 function modalProveedor(ctx, u = {}, alCrear) {
   const edicion = !!u.uid;
-  const clave = generarClave();
   const { el, cerrar } = abrirModal(`
     <form novalidate>
       <div class="modal-cab"><h2>${edicion ? "Editar proveedor" : "Nuevo proveedor"}</h2><button type="button" class="cerrar" data-cerrar aria-label="Cerrar">${icono("x")}</button></div>
-      <p class="modal-sub">${edicion ? "El RUC no se puede cambiar (es su usuario de ingreso)." : "Se crea su cuenta de acceso: entrará con su RUC y esta clave inicial."}</p>
+      <p class="modal-sub">${edicion ? "El RUC no se puede cambiar (es su usuario de ingreso)." : "Se crea su cuenta de acceso: entra con su RUC y esta clave (por defecto, su mismo RUC)."}</p>
       <label class="campo"><span>RUC</span><input class="input mono" id="p-ruc" maxlength="11" inputmode="numeric" value="${esc(u.ruc || "")}" ${edicion ? "disabled" : "autofocus"}></label>
       <label class="campo"><span>Razón social</span><input class="input" id="p-razon" value="${esc(u.razonSocial || "")}" ${edicion ? "autofocus" : ""}></label>
       <div class="grilla-2" style="gap:8px">
         <label class="campo"><span>Correo de contacto</span><input class="input" id="p-contacto" type="email" value="${esc(u.contacto || "")}" placeholder="opcional"></label>
         <label class="campo"><span>Teléfono</span><input class="input" id="p-telefono" value="${esc(u.telefono || "")}" placeholder="opcional"></label>
       </div>
-      ${edicion ? "" : `<label class="campo"><span>Clave inicial</span>
-        <div style="display:flex;gap:6px"><input class="input mono" id="p-clave" value="${clave}" autocomplete="off">
+      ${edicion ? "" : `<label class="campo"><span>Clave (por defecto su RUC)</span>
+        <div style="display:flex;gap:6px"><input class="input mono" id="p-clave" value="${esc(u.ruc || "")}" autocomplete="off">
         <button type="button" class="btn" id="p-gen" title="Generar otra">${icono("dados")}</button></div></label>`}
       <p class="error" id="p-error" hidden></p>
       <div class="modal-pie"><button type="button" class="btn" data-cerrar>Cancelar</button>
         <button type="submit" class="btn oscuro" id="p-btn">${icono("check")}${edicion ? "Guardar" : "Crear acceso"}</button></div>
     </form>`);
   $("#p-gen", el)?.addEventListener("click", () => { $("#p-clave", el).value = generarClave(); });
+  // Mientras no se escriba otra clave, la clave sigue al RUC.
+  let rucPrevio = u.ruc || "";
+  $("#p-ruc", el).addEventListener("input", () => {
+    const inp = $("#p-clave", el);
+    if (inp && inp.value === rucPrevio) inp.value = $("#p-ruc", el).value.trim();
+    rucPrevio = $("#p-ruc", el).value.trim();
+  });
   $("form", el).addEventListener("submit", async (e) => {
     e.preventDefault();
     const error = (t) => { $("#p-error", el).textContent = t; $("#p-error", el).hidden = false; };
@@ -457,17 +464,17 @@ function modalProveedor(ctx, u = {}, alCrear) {
         return;
       }
       const claveIni = $("#p-clave", el).value.trim();
-      const v = validarClaveNueva(claveIni);
+      const v = claveIni === ruc ? "" : validarClaveNueva(claveIni);
       if (v) { $("#p-btn", el).disabled = false; return error(v); }
       const email = `${ruc}@${DOMINIO_PROVEEDORES}`;
       const uid = await crearUsuario(email, claveIni);
       await setDoc(doc(db, "usuarios", uid), {
         rol: "proveedor", ruc, razonSocial: razon, nombre: razon, email, contacto, telefono,
-        activo: true, debeCambiarClave: true, creadoPor: quien(ctx), creadoEn: serverTimestamp(),
+        activo: true, debeCambiarClave: false, creadoPor: quien(ctx), creadoEn: serverTimestamp(),
       });
       cerrar();
       if (alCrear) alCrear();
-      modalCredenciales("Proveedor creado", ruc, claveIni);
+      modalCredenciales("Proveedor creado", ruc, claveIni, { pideCambio: false });
     } catch (err) {
       console.error("Portal: no se pudo guardar el proveedor", err);
       $("#p-btn", el).disabled = false;

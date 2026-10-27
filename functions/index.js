@@ -11,8 +11,8 @@
  *
  * 2) restablecerClave — el SDK del navegador no puede cambiar la clave de
  *    OTRA cuenta; esta función lo hace con el Admin SDK si quien llama es
- *    admin/contabilidad activo (contabilidad solo a proveedores). Deja la
- *    cuenta con "debeCambiarClave" para que la cambie al ingresar.
+ *    admin/contabilidad activo (contabilidad solo a proveedores). Al personal
+ *    lo deja con "debeCambiarClave"; a un proveedor no (su clave puede ser su RUC).
  *
  * Si no se despliegan, el portal funciona igual: sin el bloqueo propio (queda
  * el freno de Firebase "too-many-requests") y sin "Restablecer clave".
@@ -102,9 +102,6 @@ exports.restablecerClave = onCall({ cors: true }, async (request) => {
   const { uid, nuevaClave } = request.data || {};
   const clave = String(nuevaClave || "");
   if (!uid || typeof uid !== "string") throw new HttpsError("invalid-argument", "Falta la cuenta.");
-  if (clave.length < 8 || !/[a-zA-Z]/.test(clave) || !/\d/.test(clave)) {
-    throw new HttpsError("invalid-argument", "La clave debe tener al menos 8 caracteres, con letras y números.");
-  }
   if (uid === request.auth.uid) throw new HttpsError("failed-precondition", "Para tu propia cuenta usa \"Cambiar contraseña\".");
 
   const db = admin.firestore();
@@ -115,12 +112,18 @@ exports.restablecerClave = onCall({ cors: true }, async (request) => {
   if (q.rol === "contabilidad" && destino.data().rol !== "proveedor") {
     throw new HttpsError("permission-denied", "Contabilidad solo puede restablecer claves de proveedores.");
   }
+  // Al proveedor se le puede volver a poner su RUC; cualquier otra clave sigue la política.
+  const esProv = destino.data().rol === "proveedor";
+  const esSuRuc = esProv && clave === destino.data().ruc;
+  if (!esSuRuc && (clave.length < 8 || !/[a-zA-Z]/.test(clave) || !/\d/.test(clave))) {
+    throw new HttpsError("invalid-argument", "La clave debe tener al menos 8 caracteres, con letras y números.");
+  }
 
   await admin.auth().updateUser(uid, { password: clave, disabled: false });
   const email = (await admin.auth().getUser(uid)).email;
   if (email) await db.doc(`intentos_login/${email.toLowerCase()}`).set({ email: email.toLowerCase(), intentos: 0, bloqueadoHasta: null }, { merge: true });
   await destino.ref.update({
-    debeCambiarClave: true,
+    debeCambiarClave: !esProv,
     claveRestablecidaPor: q.nombre || request.auth.token.email || request.auth.uid,
     claveRestablecidaEn: admin.firestore.FieldValue.serverTimestamp(),
   });
