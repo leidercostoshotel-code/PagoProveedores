@@ -1,0 +1,271 @@
+/* ══════════════════════════════════════════════════════════════════
+   PORTAL DE PROVEEDORES — estilos
+   Misma identidad visual que la suite A-B-Swiss (Horarios, Requisiciones,
+   Vencimientos…): azul tinta, cinta amarilla, papel gris azulado, foto del
+   hotel de fondo en el ingreso y logo "30 años".
+   ══════════════════════════════════════════════════════════════════ */
+:root {
+  --tinta: #0B1F3A;
+  --tinta-mid: #12325C;
+  --tinta-soft: #1E4A85;
+  --papel: #EDF1F6;
+  --linea: #C8D3E0;
+  --linea-fuerte: #94A7BE;
+  --cinta: #FFDC3D;
+  --cinta-soft: #FFF3B8;
+  --rojo: #B4232A;
+  --verde: #1F7A5C;
+  --gris: #5A6B80;
+  --dorado: #B8913A;
+  --crema: #F7F0EA;
+  --sombra-texto: 0 1px 3px rgba(0,0,0,.9), 0 0 10px rgba(0,0,0,.7);
+}
+
+* { box-sizing: border-box; }
+html, body { margin: 0; padding: 0; }
+body {
+  min-height: 100vh;
+  font: 13px/1.45 ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  color: var(--tinta);
+  background: var(--papel);
+}
+[hidden] { display: none !important; }
+a { color: inherit; }
+button, input, select { font: inherit; color: inherit; }
+.mono { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
+.num { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+
+/* ── Botones (mismos tonos que Btn de la suite) ─────────────────── */
+.btn {
+  display: inline-flex; align-items: center; justify-content: center; gap: 6px;
+  padding: 7px 12px; border-radius: 4px; border: 1px solid var(--linea);
+  background: #fff; color: var(--tinta);
+  font-size: 11px; font-weight: 600; letter-spacing: .05em; text-transform: uppercase;
+  cursor: pointer; transition: opacity .15s; white-space: nowrap;
+}
+.btn:hover { opacity: .8; }
+.btn:disabled { opacity: .4; cursor: not-allowed; }
+.btn svg { width: 13px; height: 13px; flex: none; }
+.btn.chico { padding: 4px 8px; font-size: 10px; }
+.btn.chico svg { width: 11px; height: 11px; }
+.btn.oscuro { background: var(--tinta); color: #fff; border-color: var(--tinta); }
+.btn.ambar { background: var(--cinta); color: var(--tinta); border-color: #E5C000; }
+.btn.fantasma { background: transparent; color: #fff; border-color: rgba(255,255,255,.28); }
+.btn.rojo { color: var(--rojo); border-color: #E8B4B7; }
+.btn.rojo-solido { background: var(--rojo); color: #fff; border-color: var(--rojo); }
+.btn.verde { color: var(--verde); border-color: #A9D3C4; }
+.btn.bloque { width: 100%; padding: 10px 12px; }
+
+/* ── Formularios ────────────────────────────────────────────────── */
+.campo { display: block; margin-bottom: 12px; }
+.campo > span {
+  display: block; margin-bottom: 4px;
+  font-size: 10px; font-weight: 700; letter-spacing: .1em; text-transform: uppercase; color: var(--gris);
+}
+.input, .select {
+  width: 100%; padding: 8px 11px; border: 1px solid var(--linea); border-radius: 4px;
+  background: #fff; color: var(--tinta); font-size: 13px; outline: none;
+}
+.input:focus, .select:focus { border-color: var(--tinta-soft); box-shadow: 0 0 0 3px rgba(30,74,133,.15); }
+.input.chico, .select.chico { padding: 5px 8px; font-size: 12px; width: auto; }
+.con-ojo { position: relative; }
+.con-ojo .input { padding-right: 38px; }
+.ojo {
+  position: absolute; right: 4px; top: 50%; transform: translateY(-50%);
+  border: 0; background: transparent; padding: 6px; cursor: pointer; color: var(--gris); display: flex;
+}
+.ojo svg { width: 16px; height: 16px; }
+.error { margin: 0 0 12px; font-size: 11.5px; font-weight: 600; color: var(--rojo); }
+.ayuda { margin: 14px 0 0; font-size: 10.5px; color: var(--gris); }
+.ok { color: var(--verde); }
+
+/* ══════════════════════════════════════════════════════════════════
+   INGRESO (copia del PantallaLogin de la suite: foto del hotel nítida,
+   SIN velo oscuro; los textos blancos de abajo llevan sombra)
+   ══════════════════════════════════════════════════════════════════ */
+.pantalla-fondo {
+  min-height: 100vh; display: flex; flex-direction: column; align-items: center; justify-content: center;
+  gap: 16px; padding: 24px 16px;
+  background: #0B1F3A url("../img/fondo-hotel.jpg") center / cover no-repeat;
+}
+.tarjeta-ingreso {
+  width: 100%; max-width: 384px; padding: 24px; border-radius: 12px;
+  background: #fff; border: 1px solid var(--linea);
+  box-shadow: 0 25px 50px -12px rgba(0,0,0,.45);
+  animation: entrar .45s ease-out both;
+}
+.marca-ingreso { display: flex; flex-direction: column; align-items: center; gap: 8px; margin-bottom: 20px; text-align: center; }
+.logo30 { display: block; height: 56px; width: auto; border-radius: 6px; background: var(--crema); border: 1px solid var(--linea); margin-bottom: 4px; }
+.icono-sistema {
+  width: 36px; height: 36px; border-radius: 8px; background: var(--tinta);
+  display: flex; align-items: center; justify-content: center; color: var(--cinta);
+}
+.icono-sistema svg { width: 18px; height: 18px; }
+.sobretitulo { font-size: 10px; font-weight: 700; letter-spacing: .2em; text-transform: uppercase; color: var(--gris); }
+.titulo-sistema { font-size: 14px; font-weight: 700; color: var(--tinta); }
+.tarjeta-ingreso h2 { margin: 0 0 4px; font-size: 13px; font-weight: 700; letter-spacing: .05em; text-transform: uppercase; }
+.sello-seguro {
+  display: flex; align-items: center; justify-content: center; gap: 6px; margin-top: 14px;
+  font-size: 9.5px; font-weight: 700; letter-spacing: .12em; text-transform: uppercase; color: var(--verde);
+}
+.sello-seguro svg { width: 12px; height: 12px; }
+.credito { margin: 0; font-size: 9.5px; letter-spacing: .03em; color: #fff; text-shadow: var(--sombra-texto); }
+.credito.oscuro { color: var(--gris); text-shadow: none; }
+
+@keyframes entrar { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
+
+/* ── Pantalla de carga (misma animación CSS de la suite) ────────── */
+@keyframes pc-respira { 0%, 100% { transform: scale(1); box-shadow: 0 6px 24px rgba(11,31,58,.10); } 50% { transform: scale(1.025); box-shadow: 0 10px 34px rgba(184,145,58,.30); } }
+@keyframes pc-barra { 0% { left: -40%; } 100% { left: 100%; } }
+@keyframes pc-punto { 0%, 80%, 100% { opacity: .25; transform: translateY(0); } 40% { opacity: 1; transform: translateY(-3px); } }
+@keyframes pc-brillo { 0% { background-position: -200% 0; } 100% { background-position: 200% 0; } }
+.pc-raiz { min-height: 100vh; display: flex; align-items: center; justify-content: center; padding: 16px; background: var(--papel); }
+.pc-centro { display: flex; flex-direction: column; align-items: center; text-align: center; animation: entrar .45s ease-out .15s both; }
+.pc-logo { padding: 12px 20px; border-radius: 12px; background: var(--crema); border: 1px solid #E4D9CC; animation: pc-respira 2.6s ease-in-out infinite; }
+.pc-logo img { display: block; height: 60px; width: auto; }
+.pc-pista { position: relative; overflow: hidden; margin-top: 24px; height: 3px; width: 224px; border-radius: 9999px; background: #D9E1EB; }
+.pc-barra { position: absolute; top: 0; bottom: 0; width: 40%; border-radius: 9999px; background: linear-gradient(90deg, transparent, var(--dorado), #E7C873, var(--dorado), transparent); animation: pc-barra 1.5s cubic-bezier(.45,.05,.55,.95) infinite; }
+.pc-texto-linea { margin-top: 16px; font-size: 11.5px; font-weight: 700; letter-spacing: .22em; text-transform: uppercase; }
+.pc-texto { background: linear-gradient(90deg, var(--tinta) 0%, var(--tinta) 40%, var(--dorado) 50%, var(--tinta) 60%, var(--tinta) 100%); background-size: 200% 100%; -webkit-background-clip: text; background-clip: text; color: transparent; animation: pc-brillo 3s linear infinite; }
+.pc-punto { display: inline-block; color: var(--dorado); animation: pc-punto 1.2s ease-in-out infinite; }
+.pc-punto:nth-child(2) { animation-delay: .2s; }
+.pc-punto:nth-child(3) { animation-delay: .4s; }
+@media (prefers-reduced-motion: reduce) {
+  .pc-centro, .pc-logo, .pc-barra, .pc-punto, .pc-texto, .tarjeta-ingreso { animation: none !important; }
+  .pc-barra { left: 30%; }
+  .pc-texto { color: var(--tinta); background: none; }
+}
+
+/* ── Pantallas de aviso (sin acceso, etc.) ──────────────────────── */
+.pantalla-aviso { min-height: 100vh; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 16px; padding: 16px; text-align: center; background: var(--papel); }
+.pantalla-aviso .caja { max-width: 384px; padding: 24px; border-radius: 12px; background: #fff; border: 1px solid var(--linea); box-shadow: 0 1px 2px rgba(0,0,0,.05); }
+.pantalla-aviso svg.grande { width: 26px; height: 26px; color: var(--rojo); margin-bottom: 12px; }
+.pantalla-aviso h1 { margin: 0; font-size: 13px; font-weight: 700; letter-spacing: .05em; text-transform: uppercase; }
+.pantalla-aviso p { margin: 8px 0 0; font-size: 12px; color: var(--gris); }
+
+/* ══════════════════════════════════════════════════════════════════
+   APLICACIÓN (encabezado azul tinta con pestañas, como la suite)
+   ══════════════════════════════════════════════════════════════════ */
+.encabezado {
+  position: sticky; top: 0; z-index: 35; background: var(--tinta);
+  transition: box-shadow .25s ease;
+}
+.encabezado.con-sombra { box-shadow: 0 6px 18px rgba(11,31,58,.28); }
+.contenedor { max-width: 1500px; margin: 0 auto; padding: 0 16px; }
+.encabezado .contenedor { padding-top: 12px; padding-bottom: 12px; }
+.fila-sup { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 12px; }
+.marca-app { display: flex; align-items: center; gap: 8px; }
+.marca-app .icono { width: 32px; height: 32px; border-radius: 8px; background: rgba(255,255,255,.1); display: flex; align-items: center; justify-content: center; color: var(--cinta); }
+.marca-app .icono svg { width: 16px; height: 16px; }
+.marca-app .sobre { font-size: 9px; font-weight: 700; letter-spacing: .25em; text-transform: uppercase; color: #B9C9DD; }
+.marca-app .nombre { font-size: 14px; font-weight: 700; color: #fff; }
+.marca-app .logo30-enc { height: 44px; width: auto; margin-left: 12px; border-radius: 6px; background: var(--crema); box-shadow: 0 1px 4px rgba(0,0,0,.35); border: 1px solid rgba(255,255,255,.18); }
+.usuario-app { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.chip-usuario { padding: 4px 7px; border-radius: 4px; background: rgba(255,255,255,.1); color: #B9C9DD; font-size: 9px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; max-width: 340px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.pestanas { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 12px; }
+.pestana {
+  display: inline-flex; align-items: center; gap: 6px; padding: 6px 12px; border-radius: 4px; border: 0;
+  background: transparent; color: #B9C9DD; cursor: pointer;
+  font-size: 11px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; transition: background-color .15s, color .15s;
+}
+.pestana:hover { background: rgba(255,255,255,.08); }
+.pestana svg { width: 12px; height: 12px; }
+.pestana.activa { background: var(--cinta); color: var(--tinta); }
+.contador { border-radius: 9999px; padding: 0 6px; font-size: 9px; background: var(--rojo); color: #fff; }
+
+main.contenedor { padding-top: 16px; padding-bottom: 48px; }
+.pie { padding: 16px; text-align: center; font-size: 9px; color: var(--gris); }
+
+/* ── Bloques de contenido ───────────────────────────────────────── */
+.panel { background: #fff; border: 1px solid var(--linea); border-radius: 6px; padding: 16px; margin-bottom: 16px; }
+.panel-titulo { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 12px; }
+.panel-titulo h2 { margin: 0; font-size: 12px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; }
+.panel-titulo p { margin: 2px 0 0; font-size: 11px; color: var(--gris); }
+.barra-filtros { display: flex; flex-wrap: wrap; align-items: flex-end; gap: 8px; margin-bottom: 12px; }
+.barra-filtros .campo { margin: 0; }
+.barra-filtros .crece { flex: 1 1 220px; }
+.acciones { display: flex; flex-wrap: wrap; gap: 6px; }
+
+.tarjetas { display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 10px; margin-bottom: 16px; }
+.tarjeta { background: #fff; border: 1px solid var(--linea); border-radius: 4px; padding: 12px; min-width: 0; }
+.tarjeta .etiqueta { font-size: 10px; font-weight: 700; letter-spacing: .1em; text-transform: uppercase; color: var(--gris); }
+.tarjeta .valor { margin-top: 6px; font: 700 22px/1 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.tarjeta .sub { margin-top: 6px; font-size: 10px; color: var(--gris); }
+.tarjeta.destacada { background: var(--tinta); border-color: var(--tinta); color: #fff; }
+.tarjeta.destacada .etiqueta, .tarjeta.destacada .sub { color: #B9C9DD; }
+.tarjeta.destacada .valor { color: var(--cinta); }
+
+/* ── Tablas ─────────────────────────────────────────────────────── */
+.tabla-caja { overflow-x: auto; border: 1px solid var(--linea); border-radius: 4px; background: #fff; }
+table { width: 100%; border-collapse: collapse; }
+th, td { padding: 8px 10px; border-bottom: 1px solid #E3E9F0; text-align: left; font-size: 12px; vertical-align: middle; }
+th { position: sticky; top: 0; background: #F4F7FA; font-size: 10px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; color: var(--gris); white-space: nowrap; }
+tbody tr:hover { background: #F8FAFC; }
+tbody tr.clic { cursor: pointer; }
+tfoot td { font-weight: 700; background: #F4F7FA; border-top: 2px solid var(--linea); }
+td.vacio { padding: 28px; text-align: center; color: var(--gris); }
+.neto { font-weight: 700; }
+.descuento { color: var(--rojo); }
+
+.etiqueta-estado { display: inline-block; padding: 2px 7px; border-radius: 9999px; font-size: 9.5px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; }
+.etiqueta-estado.activo { background: #E1F2EB; color: var(--verde); }
+.etiqueta-estado.inactivo { background: #F6E1E2; color: var(--rojo); }
+.etiqueta-estado.pendiente { background: var(--cinta-soft); color: #7A5A00; }
+.etiqueta-estado.neutro { background: #E6ECF3; color: var(--tinta-soft); }
+
+/* ── Carga de lotes ─────────────────────────────────────────────── */
+.zona-archivo {
+  display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 6px;
+  padding: 20px; border: 2px dashed var(--linea-fuerte); border-radius: 6px; background: #F8FAFC;
+  text-align: center; cursor: pointer; transition: border-color .15s, background-color .15s;
+}
+.zona-archivo:hover, .zona-archivo.sobre { border-color: var(--tinta-soft); background: #EEF3F9; }
+.zona-archivo svg { width: 22px; height: 22px; color: var(--tinta-soft); }
+.zona-archivo b { font-size: 12px; }
+.zona-archivo small { font-size: 10.5px; color: var(--gris); }
+.zona-archivo .nombre-archivo { font-size: 11px; font-weight: 700; color: var(--verde); }
+.grilla-2 { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 12px; }
+.aviso { padding: 10px 12px; border-radius: 4px; font-size: 11.5px; margin-bottom: 12px; border: 1px solid; }
+.aviso.amarillo { background: var(--cinta-soft); border-color: #E5C000; color: #5C4600; }
+.aviso.rojo { background: #FBECEC; border-color: #E8B4B7; color: var(--rojo); }
+.aviso.azul { background: #EEF3F9; border-color: var(--linea); color: var(--tinta-soft); }
+.aviso ul { margin: 6px 0 0; padding-left: 18px; }
+
+/* ── Modales y avisos ───────────────────────────────────────────── */
+.modal-fondo { position: fixed; inset: 0; z-index: 70; display: flex; align-items: center; justify-content: center; padding: 16px; background: rgba(0,0,0,.5); }
+.modal { width: 100%; max-width: 384px; max-height: calc(100vh - 32px); overflow: auto; padding: 24px; border-radius: 12px; background: #fff; border: 1px solid var(--linea); box-shadow: 0 25px 50px -12px rgba(0,0,0,.45); }
+.modal.ancho { max-width: 640px; }
+.modal-cab { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 4px; }
+.modal-cab h2 { margin: 0; font-size: 13px; font-weight: 700; letter-spacing: .05em; text-transform: uppercase; }
+.modal-sub { margin: 0 0 16px; font-size: 11px; color: var(--gris); }
+.cerrar { border: 0; background: transparent; padding: 4px; cursor: pointer; opacity: .5; display: flex; }
+.cerrar:hover { opacity: 1; }
+.cerrar svg { width: 16px; height: 16px; }
+.modal-pie { display: flex; justify-content: flex-end; gap: 8px; margin-top: 16px; }
+.toast { position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%); z-index: 80; padding: 8px 16px; border-radius: 4px; background: var(--tinta); color: #fff; box-shadow: 0 10px 25px rgba(0,0,0,.25); font-size: 11px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; animation: entrar .2s ease-out both; }
+.toast.error { background: var(--rojo); }
+
+/* Constancia de pago (detalle de una factura) */
+.constancia dl { display: grid; grid-template-columns: auto 1fr; gap: 6px 16px; margin: 0; font-size: 12px; }
+.constancia dt { color: var(--gris); font-size: 10.5px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; align-self: center; }
+.constancia dd { margin: 0; text-align: right; }
+.constancia .total { margin-top: 12px; padding-top: 12px; border-top: 2px solid var(--tinta); display: flex; justify-content: space-between; align-items: baseline; font-weight: 700; }
+.constancia .total .mono { font-size: 20px; }
+
+@media (max-width: 640px) {
+  .marca-app .logo30-enc { display: none; }
+  .tarjeta .valor { font-size: 18px; }
+  .chip-usuario { max-width: 100%; }
+}
+
+/* ── Impresión: solo el contenido, sin encabezado ni botones ────── */
+@media print {
+  body { background: #fff; }
+  .encabezado, .pie, .barra-filtros, .acciones, .no-imprimir, .toast { display: none !important; }
+  .panel, .tabla-caja, .tarjeta { border-color: #999; box-shadow: none; }
+  .modal-fondo { position: static; background: none; padding: 0; }
+  body.imprimiendo-modal #app { display: none !important; }
+  .modal { max-width: none; box-shadow: none; border: 0; max-height: none; }
+  th { position: static; }
+}
