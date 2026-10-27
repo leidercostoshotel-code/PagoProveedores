@@ -32,10 +32,11 @@ Lo decide `firestore.rules` (no solo la pantalla). Desactivar una cuenta le cort
   - *Cargar lote:* subes el TXT de Telecrédito BCP + el CSV de descuentos de SAP B1, ves una
     vista previa con avisos (RUC inválido, factura sin desglose, proveedor sin cuenta) y confirmas.
   - *Lotes:* historial de cargas; ver o eliminar un lote cargado por error.
-  - *Proveedores:* alta con RUC + razón social + clave inicial generada; editar, activar/desactivar,
-    restablecer clave.
+  - *Proveedores:* alta con RUC + razón social (la clave por defecto es su RUC); editar,
+    activar/desactivar, restablecer clave.
   - *Usuarios:* personal interno con su rol (solo administrador).
-- **Seguridad:** cambio de clave obligatorio en el primer ingreso; claves de 8+ caracteres con letras y
+- **Seguridad:** el personal del hotel cambia la clave en su primer ingreso (los proveedores entran con
+  su RUC y su clave, por defecto su mismo RUC, sin cambio obligatorio); claves de 8+ caracteres con letras y
   números; bloqueo por intentos fallidos; cierre de sesión tras 30 min sin actividad; la sesión no
   sobrevive al cerrar el navegador.
 

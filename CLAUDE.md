@@ -36,8 +36,11 @@ del hotel administra todo desde el mismo portal. Login y estilo copiados de la s
 
 ## Autenticación
 Email/password en Firebase Auth. Proveedor = correo sintético `<RUC>@proveedores.hotel` (en el login
-basta escribir el RUC). Las cuentas se crean desde Administración con clave inicial y
-`debeCambiarClave: true`. El primer admin se crea a mano en la consola (ver README).
+basta escribir el RUC). **Proveedores (pedido del dueño, 2026-10-27): clave por defecto = su mismo RUC
+y SIN cambio de clave obligatorio** (`debeCambiarClave: false`; `decidir()` en app.js lo ignora para el
+rol proveedor; el panel acepta el RUC como clave aunque no cumpla la política). Se le advirtió que el
+RUC es público. El personal del hotel sí: clave inicial al azar y `debeCambiarClave: true`. El primer
+admin se crea a mano en la consola (ver README).
 
 ## Pendientes conocidos
 - Ajustar posiciones de ancho fijo del TXT (en `public/js/bcp.js` y en el script) con un TXT real.

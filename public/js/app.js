@@ -64,7 +64,8 @@ onUser((u) => {
 function decidir() {
   if (!user) return;
   if (!perfil || !perfil.activo || !perfil.rol) { desmontarVista(); pantallaSinAcceso(); return; }
-  if (perfil.debeCambiarClave) { desmontarVista(); pantallaCambioObligatorio(); return; }
+  // Cambio de clave obligatorio solo para el personal del hotel (los proveedores no, pedido del dueño).
+  if (perfil.debeCambiarClave && perfil.rol !== "proveedor") { desmontarVista(); pantallaCambioObligatorio(); return; }
   if (!ingresoMarcado) {
     ingresoMarcado = true;
     updateDoc(doc(db, "usuarios", user.uid), { ultimoIngreso: serverTimestamp() }).catch(() => {});

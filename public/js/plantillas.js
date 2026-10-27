@@ -39,8 +39,7 @@ const INGRESO = `
     </label>
     <p id="ingreso-error" class="error" role="alert" hidden></p>
     <button id="ingreso-btn" class="btn oscuro bloque" type="submit">Entrar</button>
-    <p class="ayuda"><b>Proveedores:</b> ingresa con tu RUC y la clave que te entregó Contabilidad. En tu primer ingreso
-      te pediremos cambiarla.<br><b>Personal del hotel:</b> ingresa con tu correo.</p>
+    <p class="ayuda"><b>Proveedores:</b> ingresa con tu RUC y la clave que te entregó Contabilidad.<br><b>Personal del hotel:</b> ingresa con tu correo.</p>
     <div class="sello-seguro" data-icono-sello>Conexión segura · 3 intentos fallidos bloquean la cuenta 1 hora</div>
   </form>
   <p class="credito">${CREDITO}</p>
