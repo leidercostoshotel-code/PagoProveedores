@@ -1,0 +1,66 @@
+/* ══════════════════════════════════════════════════════════════════
+   PAGINACIÓN EN EL SERVIDOR (obligatoria en toda lista que se lee de
+   Firestore): se pide solo la página visible (orden + limit + startAfter)
+   y el total —y las sumas que se pidan— con una consulta de agregación
+   (count/sum), que Firebase calcula sin descargar los documentos.
+
+   Uso:
+     const ps = paginaServidor({
+       clave: "adm-pagos", etiqueta: "facturas", barra: elBarra,
+       consulta: () => ({ col, filtros: [where(...)], orden: [orderBy(...)] }),
+       agregados: { neto: sum("neto") },                 // opcional
+       pintar: (docs, st) => { ... st.total, st.agg.neto ... },
+       alError: (err) => { ... },
+     });
+     ps.cargar(true);   // desde la página 1 (al cambiar filtros)
+     ps.recargar();     // la misma página, volviendo a contar (tras editar)
+   ══════════════════════════════════════════════════════════════════ */
+import { query, getDocs, limit, startAfter, getAggregateFromServer, count } from "https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore.js";
+import { htmlPagina, leerTam, guardarTam } from "./util.js";
+
+export function paginaServidor({ clave, etiqueta = "registros", barra, consulta, agregados = {}, pintar, alError }) {
+  const st = { pagina: 1, tam: leerTam(clave) || 25, cursores: [null], total: 0, agg: {}, docs: [], pedido: 0, vivo: true, inicio: 0 };
+
+  async function cargar(reiniciar = false, recontar = reiniciar) {
+    const n = ++st.pedido;
+    if (reiniciar) { st.pagina = 1; st.cursores = [null]; }
+    const c = consulta();
+    if (!c) return;
+    const cursor = st.cursores[st.pagina - 1];
+    try {
+      const [snap, agg] = await Promise.all([
+        getDocs(query(c.col, ...c.filtros, ...c.orden, ...(cursor ? [startAfter(cursor)] : []), limit(st.tam))),
+        recontar ? getAggregateFromServer(query(c.col, ...c.filtros), { total: count(), ...agregados }) : null,
+      ]);
+      if (!st.vivo || n !== st.pedido) return;
+      if (agg) { st.agg = agg.data(); st.total = st.agg.total; }
+      // Si la página quedó vacía (se borró lo último), retrocede una.
+      if (!snap.docs.length && st.pagina > 1) { st.pagina--; return cargar(false, false); }
+      st.docs = snap.docs;
+      st.inicio = (st.pagina - 1) * st.tam;
+      st.cursores[st.pagina] = snap.docs[snap.docs.length - 1] || null;
+      const paginas = Math.max(1, Math.ceil(st.total / st.tam));
+      const desde = st.total ? st.inicio + 1 : 0;
+      barra.innerHTML = htmlPagina({ pagina: st.pagina, paginas, total: st.total, desde,
+        hasta: Math.min(st.inicio + snap.docs.length, st.total), tam: st.tam, saltos: false, etiqueta });
+      pintar(snap.docs, st);
+    } catch (err) {
+      if (n === st.pedido && alError) alError(err);
+    }
+  }
+
+  barra.addEventListener("click", (e) => {
+    const b = e.target.closest("[data-pag]");
+    if (!b || b.disabled) return;
+    st.pagina += b.dataset.pag === "siguiente" ? 1 : -1;
+    cargar(false);
+  });
+  barra.addEventListener("change", (e) => {
+    if (!e.target.matches("[data-tam]")) return;
+    st.tam = Number(e.target.value);
+    guardarTam(clave, st.tam);
+    cargar(true);
+  });
+
+  return { cargar, recargar: () => cargar(false, true), estado: st, detener() { st.vivo = false; } };
+}
