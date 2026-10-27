@@ -107,10 +107,11 @@ function vistaPagos(cont, ctx, { ultimo, primero }) {
     pintar: (docs, st) => {
       docsPagina = docs.map((d) => ({ id: d.id, ...d.data() }));
       const a = st.agg;
+      const m = (k) => (st.sumasOk ? soles(a[k]) : "—");
       $("#kpis", cont).innerHTML = `
-        <div class="tarjeta destacada"><div class="etiqueta">Total abonado</div><div class="valor">${solesS(a.neto)}</div><div class="sub">${esc(actual.periodo)}</div></div>
+        <div class="tarjeta destacada"><div class="etiqueta">Total abonado</div><div class="valor">${st.sumasOk ? solesS(a.neto) : "—"}</div><div class="sub">${esc(actual.periodo)}</div></div>
         <div class="tarjeta"><div class="etiqueta">Facturas pagadas</div><div class="valor">${(st.total || 0).toLocaleString("es-PE")}</div><div class="sub">en el periodo elegido</div></div>
-        <div class="tarjeta"><div class="etiqueta">Retenciones</div><div class="valor">${soles(a.retencion)}</div><div class="sub">Detracciones: ${soles(a.detraccion)}</div></div>
+        <div class="tarjeta"><div class="etiqueta">Retenciones</div><div class="valor">${m("retencion")}</div><div class="sub">Detracciones: ${m("detraccion")}</div></div>
         <div class="tarjeta"><div class="etiqueta">Último abono</div><div class="valor">${ultimo ? fechaCorta(ultimo.fechaPago) : "—"}</div><div class="sub">${ultimo ? `${esc(ultimo.factura)} · ${solesS(ultimo.neto)}` : "Aún no hay pagos"}</div></div>`;
       $("#tb", cont).innerHTML = docsPagina.map((p, i) => `
         <tr class="clic" data-i="${i}" tabindex="0">
@@ -120,9 +121,9 @@ function vistaPagos(cont, ctx, { ultimo, primero }) {
           <td class="num neto">${soles(p.neto)}</td>
         </tr>`).join("") || `<tr><td colspan="9" class="vacio">No hay pagos registrados${ultimo ? " con estos filtros" : " para tu RUC todavía"}.</td></tr>`;
       $("#tf", cont).innerHTML = st.total ? `<tr><td colspan="4">Total (${st.total.toLocaleString("es-PE")})</td>
-        <td class="num">${soles(a.bruto)}</td><td class="num">${soles(a.retencion)}</td>
-        <td class="num">${soles(a.detraccion)}</td><td class="num">${soles(a.notaCredito)}</td>
-        <td class="num">${soles(a.neto)}</td></tr>` : "";
+        <td class="num">${m("bruto")}</td><td class="num">${m("retencion")}</td>
+        <td class="num">${m("detraccion")}</td><td class="num">${m("notaCredito")}</td>
+        <td class="num">${m("neto")}</td></tr>` : "";
     },
     alError: (err) => {
       console.error("Portal: no se pudieron leer los pagos", err);

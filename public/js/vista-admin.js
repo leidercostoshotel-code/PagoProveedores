@@ -164,11 +164,12 @@ function vistaPagos(cont, ctx) {
     pintar: (docs, st) => {
       docsPagina = docs.map((d) => ({ id: d.id, ...d.data() }));
       const a = st.agg;
+      const m = (k) => (st.sumasOk ? soles(a[k]) : "—");
       $("#kpis", cont).innerHTML = `
-        <div class="tarjeta destacada"><div class="etiqueta">Total abonado</div><div class="valor">${solesS(a.neto)}</div><div class="sub">neto pagado en la consulta</div></div>
+        <div class="tarjeta destacada"><div class="etiqueta">Total abonado</div><div class="valor">${st.sumasOk ? solesS(a.neto) : "—"}</div><div class="sub">${st.sumasOk ? "neto pagado en la consulta" : "Firebase aún prepara el índice de los totales; reintenta en unos minutos"}</div></div>
         <div class="tarjeta"><div class="etiqueta">Facturas</div><div class="valor">${(st.total || 0).toLocaleString("es-PE")}</div><div class="sub">en la consulta</div></div>
-        <div class="tarjeta"><div class="etiqueta">Retenciones</div><div class="valor">${soles(a.retencion)}</div><div class="sub">Detracciones: ${soles(a.detraccion)}</div></div>
-        <div class="tarjeta"><div class="etiqueta">Notas de crédito</div><div class="valor">${soles(a.notaCredito)}</div><div class="sub">Bruto: ${soles(a.bruto)}</div></div>`;
+        <div class="tarjeta"><div class="etiqueta">Retenciones</div><div class="valor">${m("retencion")}</div><div class="sub">Detracciones: ${m("detraccion")}</div></div>
+        <div class="tarjeta"><div class="etiqueta">Notas de crédito</div><div class="valor">${m("notaCredito")}</div><div class="sub">Bruto: ${m("bruto")}</div></div>`;
       $("#tb", cont).innerHTML = docsPagina.map((x, i) => `
         <tr class="clic" data-i="${i}">
           <td>${fechaCorta(x.fechaPago)}</td><td class="mono">${esc(x.ruc)}</td><td>${esc(x.razonSocial)}</td><td class="mono">${esc(x.factura)}</td><td>${esc(x.banco)}</td>
@@ -176,9 +177,9 @@ function vistaPagos(cont, ctx) {
           <td class="num descuento">${x.detraccion ? soles(x.detraccion) : "—"}</td><td class="num descuento">${x.notaCredito ? soles(x.notaCredito) : "—"}</td>
           <td class="num neto">${soles(x.neto)}</td><td class="mono" style="font-size:10.5px">${esc(x.lote)}</td>
         </tr>`).join("") || `<tr><td colspan="11" class="vacio">No hay pagos con estos filtros.</td></tr>`;
-      $("#tf", cont).innerHTML = st.total ? `<tr><td colspan="5">Total de la consulta (${st.total.toLocaleString("es-PE")})</td><td class="num">${soles(a.bruto)}</td>
-        <td class="num">${soles(a.retencion)}</td><td class="num">${soles(a.detraccion)}</td>
-        <td class="num">${soles(a.notaCredito)}</td><td class="num">${soles(a.neto)}</td><td></td></tr>` : "";
+      $("#tf", cont).innerHTML = st.total ? `<tr><td colspan="5">Total de la consulta (${st.total.toLocaleString("es-PE")})</td><td class="num">${m("bruto")}</td>
+        <td class="num">${m("retencion")}</td><td class="num">${m("detraccion")}</td>
+        <td class="num">${m("notaCredito")}</td><td class="num">${m("neto")}</td><td></td></tr>` : "";
     },
     alError: (err) => {
       console.error("Portal: no se pudieron leer los pagos", err);

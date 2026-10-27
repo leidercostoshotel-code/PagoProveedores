@@ -86,6 +86,11 @@ admin se crea a mano en la consola (ver README).
 sumas que hagan falta— con `agregar()` (count/sum), sin descargar los documentos. **Firestore acepta como
 máximo 5 cálculos por consulta de agregación** (con 6 da `invalid-argument`): usar siempre `agregar()`,
 que los reparte en tandas de 5.
+**`sum()` con filtros exige un índice compuesto por cada combinación** (campos del filtro… + el campo que
+se suma, todos ASC; si falta da `failed-precondition`): los de `pagos` ya están en `firestore.indexes.json`
+(filtros × bruto/retencion/detraccion/notaCredito/neto). Un filtro o una suma nueva suma sus índices.
+`paginaServidor` pide el conteo y las sumas por separado: si las sumas fallan (índice aún creándose tras
+publicar), la lista carga igual y los totales salen "—" (`st.sumasOk`).
 25/50/100 por página, se recuerda por lista; `cargar(true)` al cambiar filtros, `recargar()` tras editar.
 - Admin: **Pagos** (fechas; o RUC + fechas; o razón social / factura / lote en todas las fechas, porque
   Firestore no combina dos rangos; totales de la consulta con sum), **Lotes**, **Proveedores** (búsqueda
