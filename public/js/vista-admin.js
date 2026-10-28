@@ -1,6 +1,6 @@
 /* ══════════════════════════════════════════════════════════════════
    ADMINISTRACIÓN (personal del hotel: admin / contabilidad / consulta)
-   Pestañas: Pagos · Cargar lote · Lotes · Proveedores · Usuarios.
+   Pestañas: Pagos · Comprobantes · Cargar lote · Lotes · Proveedores · Usuarios.
    Lo que cada rol puede hacer lo decide de verdad firestore.rules; aquí
    solo se esconden los botones que no le corresponden.
    ══════════════════════════════════════════════════════════════════ */
@@ -12,17 +12,19 @@ import {
 import {
   $, esc, icono, soles, monto, monedaComun, fechaCorta, fechaHora, toISO, hoyISO,
   abrirModal, confirmar, notificar, descargarCSV, generarClave, validarClaveNueva, ERRORES_ALTA,
-  paginador,
+  paginador, archivosSoltados,
 } from "./util.js";
 import { ROLES_INTERNOS, etiquetaRol, puedeGestionar } from "./roles.js";
 import { leerArchivo, interpretarLote, leerDescuentos, huellaArchivo, formasFactura } from "./bcp.js";
 import { constancia } from "./vista-proveedor.js";
 import { paginaServidor } from "./paginaServidor.js";
+import { vistaComprobantes } from "./comprobantes.js";
 import { DOMINIO_PROVEEDORES } from "./config.js";
 
 export function pestanas(rol) {
   return [
     { id: "pagos", texto: "Pagos", icono: "recibo" },
+    { id: "comprobantes", texto: "Comprobantes", icono: "archivo" },
     ...(puedeGestionar(rol) ? [{ id: "cargar", texto: "Cargar lotes", icono: "subir" }] : []),
     { id: "lotes", texto: "Lotes", icono: "capas" },
     { id: "proveedores", texto: "Proveedores", icono: "edificio" },
@@ -31,7 +33,7 @@ export function pestanas(rol) {
 }
 
 export function montar(id, cont, ctx) {
-  const vistas = { pagos: vistaPagos, cargar: vistaCargar, lotes: vistaLotes, proveedores: vistaProveedores, usuarios: vistaUsuarios };
+  const vistas = { pagos: vistaPagos, comprobantes: vistaComprobantes, cargar: vistaCargar, lotes: vistaLotes, proveedores: vistaProveedores, usuarios: vistaUsuarios };
   return vistas[id](cont, ctx);
 }
 
@@ -548,23 +550,6 @@ async function proveedoresDelLote(id, ctx) {
   }
 }
 
-/** Archivos de lo que se suelta en la zona: entra también en las carpetas (y sus subcarpetas). */
-async function archivosSoltados(dt) {
-  const entradas = [...(dt.items || [])].map((it) => it.webkitGetAsEntry && it.webkitGetAsEntry()).filter(Boolean);
-  if (!entradas.length) return [...dt.files];
-  const salida = [];
-  const leerCarpeta = (dir) => new Promise((ok) => {
-    const lector = dir.createReader(), todas = [];
-    const tanda = () => lector.readEntries((es) => { if (!es.length) return ok(todas); todas.push(...es); tanda(); }, () => ok(todas));
-    tanda();
-  });
-  async function recorrer(e) {
-    if (e.isFile) salida.push(await new Promise((ok, mal) => e.file(ok, mal)));
-    else if (e.isDirectory) for (const h of await leerCarpeta(e)) await recorrer(h);
-  }
-  for (const e of entradas) await recorrer(e);
-  return salida;
-}
 
 /** RUC (de la lista dada) que ya tienen cuenta de proveedor: lee solo esos, de 30 en 30. */
 async function rucsConCuenta(rucs) {

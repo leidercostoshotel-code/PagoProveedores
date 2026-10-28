@@ -270,3 +270,21 @@ export function paginador(clave, alCambiar, { etiqueta = "registros" } = {}) {
   };
 }
 export { leerTam, guardarTam };
+
+/** Archivos de lo que se suelta en la zona: entra también en las carpetas (y sus subcarpetas). */
+export async function archivosSoltados(dt) {
+  const entradas = [...(dt.items || [])].map((it) => it.webkitGetAsEntry && it.webkitGetAsEntry()).filter(Boolean);
+  if (!entradas.length) return [...dt.files];
+  const salida = [];
+  const leerCarpeta = (dir) => new Promise((ok) => {
+    const lector = dir.createReader(), todas = [];
+    const tanda = () => lector.readEntries((es) => { if (!es.length) return ok(todas); todas.push(...es); tanda(); }, () => ok(todas));
+    tanda();
+  });
+  async function recorrer(e) {
+    if (e.isFile) salida.push(await new Promise((ok, mal) => e.file(ok, mal)));
+    else if (e.isDirectory) for (const h of await leerCarpeta(e)) await recorrer(h);
+  }
+  for (const e of entradas) await recorrer(e);
+  return salida;
+}

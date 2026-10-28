@@ -27,7 +27,19 @@ await env.withSecurityRulesDisabled(async (c) => {
   await setDoc(doc(db, "pagos", "X1"), { ruc: "20333333333", factura: "F3", fechaPago: "2026-10-01", neto: 5 });
   await setDoc(doc(db, "lotes", "L1"), { total: 1 });
   await setDoc(doc(db, "intentos_login", "a@b.c"), { intentos: 1 });
+  await setDoc(doc(db, "comprobantes", "20111111111_01_F001-1"), { ruc: "20111111111", origen: "hotel", total: 10 });
+  await setDoc(doc(db, "comprobantes", "20111111111_01_F001-2"), { ruc: "20111111111", origen: "proveedor", total: 20 });
+  await setDoc(doc(db, "comprobantes", "20222222222_01_F001-1"), { ruc: "20222222222", origen: "proveedor", total: 30 });
 });
+// Comprobante válido (como lo arma public/js/comprobantes.js).
+const comp = (uid, ruc, numero, origen, extra = {}) => ({
+  ruc, razonSocial: "X", tipo: "01", tipoNombre: "Factura Electrónica", serie: "F001", numero, correlativo: String(numero),
+  comprobante: `F001-${numero}`, facturaPago: `F${String(numero).padStart(8, "0")}`, fechaEmision: "2026-10-01", fechaVencimiento: "",
+  moneda: "PEN", tipoCambio: 0, neto: 100, exento: 0, impuestos: 18, total: 118, detraccion: 0, rucReceptor: "20297885538",
+  receptor: "HOTEL", refTipo: "", refValor: "", estadoSunat: "", motivoRechazo: "", gosocketId: "", items: [],
+  origen, archivo: "a.xml", hash: "h", subidoPorUid: uid, subidoEn: serverTimestamp(), ...extra,
+});
+const compRef = (db, ruc, numero) => doc(db, "comprobantes", `${ruc}_01_F001-${numero}`);
 const as = (uid) => (uid ? env.authenticatedContext(uid) : env.unauthenticatedContext()).firestore();
 let ok = 0, mal = 0;
 async function caso(nombre, esperado, fn) {
@@ -76,6 +88,25 @@ await caso("NO vuelve a poner debeCambiarClave en true para otro campo", false, 
 await caso("NO crea un proveedor", false, () => setDoc(doc(db, "usuarios", "NUEVO"), { rol: "proveedor", activo: true, ruc: "20222222222" }));
 await caso("NO lee intentos_login", false, () => getDoc(doc(db, "intentos_login", "a@b.c")));
 
+console.log("Proveedor A · comprobantes (F12)");
+db = as("PA");
+await caso("sube SU comprobante", true, () => setDoc(compRef(db, "20111111111", 9), comp("PA", "20111111111", 9, "proveedor")));
+await caso("NO sube uno de otro RUC", false, () => setDoc(compRef(db, "20222222222", 9), comp("PA", "20222222222", 9, "proveedor")));
+await caso("NO se hace pasar por el hotel (origen)", false, () => setDoc(compRef(db, "20111111111", 10), comp("PA", "20111111111", 10, "hotel")));
+await caso("NO sube con un ID que no cuadra", false, () => setDoc(doc(db, "comprobantes", "20111111111_01_F001-77"), comp("PA", "20111111111", 11, "proveedor")));
+await caso("NO agrega campos extra", false, () => setDoc(compRef(db, "20111111111", 12), comp("PA", "20111111111", 12, "proveedor", { pagado: true })));
+await caso("NO firma a nombre de otro usuario", false, () => setDoc(compRef(db, "20111111111", 13), comp("PB", "20111111111", 13, "proveedor")));
+await caso("lee el suyo por ID", true, () => getDoc(compRef(db, "20111111111", 1)));
+await caso("consulta por ID uno suyo que no existe", true, () => getDoc(compRef(db, "20111111111", 999)));
+await caso("NO lee el de B por ID", false, () => getDoc(compRef(db, "20222222222", 1)));
+await caso("lista los suyos", true, () => getDocs(query(collection(db, "comprobantes"), where("ruc", "==", "20111111111"))));
+await caso("NO lista los de B", false, () => getDocs(query(collection(db, "comprobantes"), where("ruc", "==", "20222222222"))));
+await caso("NO lista todos", false, () => getDocs(collection(db, "comprobantes")));
+await caso("NO cuenta todos", false, () => getAggregateFromServer(collection(db, "comprobantes"), { n: count() }));
+await caso("reemplaza el que él subió", true, () => setDoc(compRef(db, "20111111111", 2), comp("PA", "20111111111", 2, "proveedor")));
+await caso("NO cambia el que registró el hotel", false, () => setDoc(compRef(db, "20111111111", 1), comp("PA", "20111111111", 1, "proveedor")));
+await caso("NO borra comprobantes", false, () => deleteDoc(compRef(db, "20111111111", 2)));
+
 console.log("Proveedor desactivado");
 db = as("PX");
 await caso("NO lee ni sus propios pagos", false, () => pagosDe(db, "20333333333"));
@@ -89,6 +120,8 @@ await caso("suma todos los pagos (totales del panel)", true, () => getAggregateF
 await caso("NO escribe pagos", false, () => setDoc(doc(db, "pagos", "Z"), { ruc: "1" }));
 await caso("NO crea proveedores", false, () => setDoc(doc(db, "usuarios", "N1"), { rol: "proveedor", activo: true, ruc: "20444444444" }));
 await caso("NO se sube a admin", false, () => updateDoc(doc(db, "usuarios", "CSU"), { rol: "admin" }));
+await caso("lee todos los comprobantes", true, () => getDocs(collection(db, "comprobantes")));
+await caso("NO sube comprobantes", false, () => setDoc(compRef(db, "20111111111", 50), comp("CSU", "20111111111", 50, "hotel")));
 
 console.log("Contabilidad");
 db = as("CON");
@@ -99,6 +132,11 @@ await caso("NO edita al admin", false, () => updateDoc(doc(db, "usuarios", "ADM"
 await caso("NO convierte proveedor en admin", false, () => updateDoc(doc(db, "usuarios", "PB"), { rol: "admin" }));
 await caso("NO cambia el RUC de un proveedor", false, () => updateDoc(doc(db, "usuarios", "PB"), { ruc: "20111111111" }));
 await caso("desactiva un proveedor", true, () => updateDoc(doc(db, "usuarios", "PB"), { activo: false }));
+await caso("sube un comprobante (XML)", true, () => setDoc(compRef(db, "20222222222", 60), comp("CON", "20222222222", 60, "hotel")));
+await caso("importa uno del Excel de Gosocket", true, () => setDoc(compRef(db, "20222222222", 61), comp("CON", "20222222222", 61, "gosocket", { estadoSunat: "ACEPTADO", gosocketId: "abc" })));
+await caso("actualiza solo el estado SUNAT", true, () => updateDoc(compRef(db, "20222222222", 60), { estadoSunat: "RECHAZADO", gosocketId: "def" }));
+await caso("NO lo marca como subido por el proveedor", false, () => setDoc(compRef(db, "20222222222", 62), comp("CON", "20222222222", 62, "proveedor")));
+await caso("borra un comprobante", true, () => deleteDoc(compRef(db, "20222222222", 61)));
 await caso("NO se sube a admin", false, () => updateDoc(doc(db, "usuarios", "CON"), { rol: "admin" }));
 
 console.log("Administrador");

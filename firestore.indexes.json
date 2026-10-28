@@ -765,6 +765,162 @@
           "order": "ASCENDING"
         }
       ]
+    },
+    {
+      "collectionGroup": "comprobantes",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "ruc",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "fechaEmision",
+          "order": "DESCENDING"
+        }
+      ]
+    },
+    {
+      "collectionGroup": "comprobantes",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "tipo",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "fechaEmision",
+          "order": "DESCENDING"
+        }
+      ]
+    },
+    {
+      "collectionGroup": "comprobantes",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "ruc",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "tipo",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "fechaEmision",
+          "order": "DESCENDING"
+        }
+      ]
+    },
+    {
+      "collectionGroup": "comprobantes",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "comprobante",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "fechaEmision",
+          "order": "DESCENDING"
+        }
+      ]
+    },
+    {
+      "collectionGroup": "comprobantes",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "ruc",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "comprobante",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "fechaEmision",
+          "order": "DESCENDING"
+        }
+      ]
+    },
+    {
+      "collectionGroup": "comprobantes",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "ruc",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "fechaEmision",
+          "order": "ASCENDING"
+        }
+      ]
+    },
+    {
+      "collectionGroup": "comprobantes",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "tipo",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "fechaEmision",
+          "order": "ASCENDING"
+        }
+      ]
+    },
+    {
+      "collectionGroup": "comprobantes",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "ruc",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "tipo",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "fechaEmision",
+          "order": "ASCENDING"
+        }
+      ]
+    },
+    {
+      "collectionGroup": "comprobantes",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "comprobante",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "fechaEmision",
+          "order": "ASCENDING"
+        }
+      ]
+    },
+    {
+      "collectionGroup": "comprobantes",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "ruc",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "comprobante",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "fechaEmision",
+          "order": "ASCENDING"
+        }
+      ]
     }
   ],
   "fieldOverrides": []
