@@ -27,8 +27,11 @@ Lo decide `firestore.rules` (no solo la pantalla). Desactivar una cuenta le cort
 - **Proveedor:** tarjetas con total abonado, facturas, retenciones y último abono; filtros por año,
   mes y factura; constancia de pago imprimible por factura; resumen por mes; exportar a Excel (CSV).
   Cuenta bancaria enmascarada (solo últimos 4 dígitos).
+  *Mis comprobantes:* envía el XML de sus facturas (o un ZIP) y ve si cada una ya se pagó.
 - **Administración:**
   - *Pagos:* búsqueda por fechas, RUC, razón social, factura o lote; totales; exportar CSV.
+  - *Comprobantes:* facturas recibidas (XML de SUNAT, ZIP o el Excel "Recibidos" de Gosocket), cruzadas con
+    los pagos ("Pagado el …" / "Pendiente"); descarga a Excel con las mismas columnas que Gosocket.
   - *Cargar lote:* subes el TXT de Telecrédito BCP + el CSV de descuentos de SAP B1, ves una
     vista previa con avisos (RUC inválido, factura sin desglose, proveedor sin cuenta) y confirmas.
   - *Lotes:* historial de cargas; ver o eliminar un lote cargado por error.
@@ -107,6 +110,17 @@ duplican (cada uno se identifica por RUC + factura + fecha de abono). El CSV de 
 formato de `ejemplos/descuentos.csv` (la factura puede venir como `F001-46937`: se cruza con la del TXT
 `F00046937` por RUC y número). Si el total o la cantidad de pagos del encabezado del TXT no cuadran con
 el detalle, ese archivo queda en "Revisar".
+
+## Comprobantes (facturas recibidas, como Gosocket)
+
+Pestaña **Comprobantes** (hotel) y **Mis comprobantes** (proveedor). Se suben **XML de SUNAT** (UBL 2.1: facturas,
+boletas, notas de crédito y débito) o un **ZIP** con varios; Contabilidad además puede subir el **Excel de Gosocket**
+(Inbox → Recibidos → Exportar). Se guarda solo y nunca se duplica (cada comprobante es RUC + tipo + serie-número).
+Se rechazan: XML de otro RUC (proveedor), dirigidos a otro receptor que el hotel (`RUC_HOTEL` en `config.js`),
+constancias CDR, guías de remisión y PDF. Cada comprobante se cruza con los pagos de los TXT: `F001-46937` del
+XML es `F00046937` en el TXT. **Excel (formato Gosocket)** descarga lo filtrado con las 53 columnas de Gosocket
+(con "Pagado" y "Fecha Pago" llenos). Todo se lee en el navegador: no necesita plan Blaze. Tras publicar esta
+parte, publica también `reglas` (reglas e índices nuevos).
 
 ## Probar en local
 ```
