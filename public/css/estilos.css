@@ -84,11 +84,17 @@ button, input, select { font: inherit; color: inherit; }
    INGRESO (copia del PantallaLogin de la suite: foto del hotel nítida,
    SIN velo oscuro; los textos blancos de abajo llevan sombra)
    ══════════════════════════════════════════════════════════════════ */
+/* Fija a la pantalla (no se mueve en el celular al ocultarse la barra del navegador ni al abrir
+   el teclado): la foto no se reescala y, si la tarjeta no entra, se desplaza solo esta capa. */
 .pantalla-fondo {
-  min-height: 100vh; display: flex; flex-direction: column; align-items: center; justify-content: center;
+  position: fixed; inset: 0; overflow-y: auto; overscroll-behavior: none; -webkit-overflow-scrolling: touch;
+  display: flex; flex-direction: column; align-items: center;
   gap: 16px; padding: 24px 16px;
   background: #0B1F3A url("../img/fondo-hotel.jpg") center / cover no-repeat;
 }
+/* Centrado vertical que no corta la tarjeta arriba cuando la pantalla es baja. */
+.pantalla-fondo > :first-child { margin-top: auto; }
+.pantalla-fondo > :last-child { margin-bottom: auto; }
 .tarjeta-ingreso {
   width: 100%; max-width: 384px; padding: 24px; border-radius: 12px;
   background: #fff; border: 1px solid var(--linea);
@@ -253,6 +259,12 @@ td.vacio { padding: 28px; text-align: center; color: var(--gris); }
 .constancia .total { margin-top: 12px; padding-top: 12px; border-top: 2px solid var(--tinta); display: flex; justify-content: space-between; align-items: baseline; font-weight: 700; }
 .constancia .total .mono { font-size: 20px; }
 
+/* Celular o tablet (también en horizontal): 16 px, con menos el iPhone hace zoom al tocar la casilla y
+   toda la pantalla se mueve; la tarjeta de ingreso aparece sin animación. */
+@media (max-width: 640px), (pointer: coarse) {
+  .input, .select, .input.chico, .select.chico { font-size: 16px; }
+  .tarjeta-ingreso { animation: none; }
+}
 @media (max-width: 640px) {
   .marca-app .logo30-enc { display: none; }
   .tarjeta .valor { font-size: 18px; }

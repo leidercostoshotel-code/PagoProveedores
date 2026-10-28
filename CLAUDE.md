@@ -10,6 +10,9 @@ del hotel administra todo desde el mismo portal. Login y estilo copiados de la s
 - `public/index.html` — **mínimo (pedido del dueño: máximo ~20 líneas)**. No meter marcado ahí:
   las pantallas viven en `public/js/plantillas.js`.
 - `public/css/estilos.css` — todos los estilos (paleta de la suite: tinta #0B1F3A, cinta #FFDC3D, papel #EDF1F6).
+  `.pantalla-fondo` (ingreso) es `position: fixed` con su propio scroll: en el celular no se mueve al
+  ocultarse la barra del navegador ni con el teclado; en pantallas táctiles las casillas van a 16 px (con
+  menos el iPhone hace zoom al tocarlas). No volver a `min-height: 100vh` ahí.
 - `public/js/config.js` — configuración de Firebase (placeholders `TU_...` que reemplaza el workflow con los secrets), dominio de proveedores, correo de Contabilidad, minutos de inactividad.
 - `public/js/firebase.js` — Auth/Firestore/Functions: `login()` con bloqueo, `cambiarPassword()`, `crearUsuario()` (segunda instancia de Auth), `restablecerClave()`.
 - `public/js/app.js` — flujo de pantallas: carga → ingreso → perfil → cambio de clave obligatorio → app por rol;
