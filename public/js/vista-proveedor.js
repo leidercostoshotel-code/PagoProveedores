@@ -192,20 +192,26 @@ function vistaResumen(cont, ctx, { ultimo, primero }) {
     if (!anio) { $("#tb", cont).innerHTML = `<tr><td colspan="7" class="vacio">Aún no hay pagos registrados.</td></tr>`; return; }
     $("#tb", cont).innerHTML = `<tr><td colspan="7" class="vacio">Cargando…</td></tr>`;
     try {
-      const meses = await Promise.all(Array.from({ length: 12 }, (_, m) => agregar(
-        query(colPagos(), where("ruc", "==", ruc), where("fechaPago", ">=", `${anio}-${pad2(m + 1)}-01`), where("fechaPago", "<=", finMes(Number(anio), m + 1))),
-        { total: count(), ...SUMAS() }).then((r) => ({ mes: m, ...r }))));
+      // El conteo va aparte de las sumas: si las sumas fallan (índice aún creándose), los meses y las
+      // facturas se ven igual y los montos salen "—".
+      const meses = await Promise.all(Array.from({ length: 12 }, (_, m) => {
+        const q = query(colPagos(), where("ruc", "==", ruc), where("fechaPago", ">=", `${anio}-${pad2(m + 1)}-01`), where("fechaPago", "<=", finMes(Number(anio), m + 1)));
+        return Promise.all([agregar(q, { total: count() }), agregar(q, SUMAS()).catch(() => null)])
+          .then(([c, s]) => ({ mes: m, ...c, ...(s || {}), sinSumas: !s }));
+      }));
       if (!vivo || $("#f-anio", cont).value !== anio) return;
       const con = meses.filter((x) => x.total).reverse();
+      const sinSumas = con.some((x) => x.sinSumas);
+      const mf = (v) => (sinSumas ? "—" : soles(v));
       const t = (k) => meses.reduce((s, x) => s + (Number(x[k]) || 0), 0);
       $("#tb", cont).innerHTML = con.map((x) => `<tr>
         <td>${NOMBRES_MES[x.mes]} ${esc(anio)}</td><td class="num">${x.total}</td>
-        <td class="num">${soles(x.bruto)}</td><td class="num descuento">${soles(x.retencion)}</td>
-        <td class="num descuento">${soles(x.detraccion)}</td><td class="num descuento">${soles(x.notaCredito)}</td>
-        <td class="num neto">${soles(x.neto)}</td></tr>`).join("") || `<tr><td colspan="7" class="vacio">Sin pagos en ${esc(anio)}.</td></tr>`;
-      $("#tf", cont).innerHTML = con.length ? `<tr><td>Total ${esc(anio)}</td><td class="num">${t("total")}</td><td class="num">${soles(t("bruto"))}</td>
-        <td class="num">${soles(t("retencion"))}</td><td class="num">${soles(t("detraccion"))}</td><td class="num">${soles(t("notaCredito"))}</td>
-        <td class="num">${soles(t("neto"))}</td></tr>` : "";
+        <td class="num">${mf(x.bruto)}</td><td class="num descuento">${mf(x.retencion)}</td>
+        <td class="num descuento">${mf(x.detraccion)}</td><td class="num descuento">${mf(x.notaCredito)}</td>
+        <td class="num neto">${mf(x.neto)}</td></tr>`).join("") || `<tr><td colspan="7" class="vacio">Sin pagos en ${esc(anio)}.</td></tr>`;
+      $("#tf", cont).innerHTML = con.length ? `<tr><td>Total ${esc(anio)}</td><td class="num">${t("total")}</td><td class="num">${mf(t("bruto"))}</td>
+        <td class="num">${mf(t("retencion"))}</td><td class="num">${mf(t("detraccion"))}</td><td class="num">${mf(t("notaCredito"))}</td>
+        <td class="num">${mf(t("neto"))}</td></tr>` : "";
     } catch (err) {
       console.error("Portal: no se pudo armar el resumen", err);
       $("#tb", cont).innerHTML = `<tr><td colspan="7" class="vacio">No se pudo cargar el resumen.</td></tr>`;

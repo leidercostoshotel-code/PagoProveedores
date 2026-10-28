@@ -48,7 +48,15 @@ export function paginaServidor({ clave, etiqueta = "registros", barra, consulta,
           : null,
       ]);
       if (!st.vivo || n !== st.pedido) return;
-      if (cuenta) { st.total = cuenta.total; st.sumasOk = !!sumas || !Object.keys(agregados).length; st.agg = { total: cuenta.total, ...(sumas || {}) }; }
+      if (cuenta) {
+        let s = sumas;
+        // Sin sumas del servidor pero con todo en esta página (lo normal para un proveedor): se suman aquí
+        // mismo, sin leer nada más. La clave de cada agregado es el campo que suma (bruto: sum("bruto")).
+        if (!s && Object.keys(agregados).length && !cursor && cuenta.total <= snap.docs.length) {
+          s = Object.fromEntries(Object.keys(agregados).map((k) => [k, snap.docs.reduce((t, d) => t + (Number(d.data()[k]) || 0), 0)]));
+        }
+        st.total = cuenta.total; st.sumasOk = !!s || !Object.keys(agregados).length; st.agg = { total: cuenta.total, ...(s || {}) };
+      }
       // Si la página quedó vacía (se borró lo último), retrocede una.
       if (!snap.docs.length && st.pagina > 1) { st.pagina--; return cargar(false, false); }
       st.docs = snap.docs;
