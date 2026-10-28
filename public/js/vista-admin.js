@@ -10,7 +10,7 @@ import {
   writeBatch, serverTimestamp, sum,
 } from "https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore.js";
 import {
-  $, esc, icono, soles, solesS, fechaCorta, fechaHora, toISO, hoyISO,
+  $, esc, icono, soles, monto, monedaComun, fechaCorta, fechaHora, toISO, hoyISO,
   abrirModal, confirmar, notificar, descargarCSV, generarClave, validarClaveNueva, ERRORES_ALTA,
   paginador,
 } from "./util.js";
@@ -171,22 +171,24 @@ function vistaPagos(cont, ctx) {
     pintar: (docs, st) => {
       docsPagina = docs.map((d) => ({ id: d.id, ...d.data() }));
       const a = st.agg;
-      const m = (k) => (st.sumasOk ? soles(a[k]) : "—");
+      // Totales con la moneda de las facturas; si hay soles y dólares juntos, sin símbolo y con aviso.
+      const mon = monedaComun(docsPagina), mezcla = !mon;
+      const m = (k) => (st.sumasOk ? (mon ? `${mon} ${soles(a[k])}` : soles(a[k])) : "—");
       $("#kpis", cont).innerHTML = `
-        <div class="tarjeta destacada"><div class="etiqueta">Total abonado</div><div class="valor">${st.sumasOk ? solesS(a.neto) : "—"}</div><div class="sub">${st.sumasOk ? "neto pagado en la consulta" : "Firebase aún prepara el índice de los totales; reintenta en unos minutos"}</div></div>
+        <div class="tarjeta destacada"><div class="etiqueta">Total abonado</div><div class="valor">${m("neto")}</div><div class="sub">${st.sumasOk ? "neto pagado en la consulta" : "Firebase aún prepara el índice de los totales; reintenta en unos minutos"}</div></div>
         <div class="tarjeta"><div class="etiqueta">Facturas</div><div class="valor">${(st.total || 0).toLocaleString("es-PE")}</div><div class="sub">en la consulta</div></div>
         <div class="tarjeta"><div class="etiqueta">Retenciones</div><div class="valor">${m("retencion")}</div><div class="sub">Detracciones: ${m("detraccion")}</div></div>
         <div class="tarjeta"><div class="etiqueta">Notas de crédito</div><div class="valor">${m("notaCredito")}</div><div class="sub">Bruto: ${m("bruto")}</div></div>`;
       $("#tb", cont).innerHTML = docsPagina.map((x, i) => `
         <tr class="clic" data-i="${i}">
           <td>${fechaCorta(x.fechaPago)}</td><td class="mono">${esc(x.ruc)}</td><td>${esc(x.razonSocial)}</td><td class="mono">${esc(x.factura)}</td><td>${esc(x.banco)}</td>
-          <td class="num">${soles(x.bruto)}</td><td class="num descuento">${x.retencion ? soles(x.retencion) : "—"}</td>
-          <td class="num descuento">${x.detraccion ? soles(x.detraccion) : "—"}</td><td class="num descuento">${x.notaCredito ? soles(x.notaCredito) : "—"}</td>
-          <td class="num neto">${soles(x.neto)}</td><td class="mono" style="font-size:10.5px">${esc(x.lote)}</td>
+          <td class="num">${monto(x.bruto, x.moneda)}</td><td class="num descuento">${x.retencion ? monto(x.retencion, x.moneda) : "—"}</td>
+          <td class="num descuento">${x.detraccion ? monto(x.detraccion, x.moneda) : "—"}</td><td class="num descuento">${x.notaCredito ? monto(x.notaCredito, x.moneda) : "—"}</td>
+          <td class="num neto">${monto(x.neto, x.moneda)}</td><td class="mono" style="font-size:10.5px">${esc(x.lote)}</td>
         </tr>`).join("") || `<tr><td colspan="11" class="vacio">No hay pagos con estos filtros.</td></tr>`;
       $("#tf", cont).innerHTML = st.total ? `<tr><td colspan="5">Total de la consulta (${st.total.toLocaleString("es-PE")})</td><td class="num">${m("bruto")}</td>
         <td class="num">${m("retencion")}</td><td class="num">${m("detraccion")}</td>
-        <td class="num">${m("notaCredito")}</td><td class="num">${m("neto")}</td><td></td></tr>` : "";
+        <td class="num">${m("notaCredito")}</td><td class="num">${m("neto")}</td><td></td></tr>${mezcla ? `<tr><td colspan="11" class="ayuda">Hay pagos en soles y en dólares en esta página: los totales suman ambas monedas.</td></tr>` : ""}` : "";
     },
     alError: (err) => {
       console.error("Portal: no se pudieron leer los pagos", err);
@@ -365,7 +367,7 @@ function vistaCargar(cont, ctx) {
       const sinCuenta = new Set(hechos.flatMap((x) => x.r.pagos.map((p) => p.ruc)).filter((r) => !cuentas.has(r))).size;
       const cuantos = (...e) => lotes.filter((x) => e.includes(x.estado)).length;
       $("#kpis-carga", caja).innerHTML = `
-        <div class="tarjeta destacada"><div class="etiqueta">Guardado ahora</div><div class="valor">${solesS(total)}</div><div class="sub">${hechos.length} archivo(s) · ${facturas.toLocaleString("es-PE")} facturas</div></div>
+        <div class="tarjeta destacada"><div class="etiqueta">Guardado ahora</div><div class="valor">${(() => { const mo = monedaComun(hechos.map((x) => ({ moneda: x.r.moneda }))); return mo ? `${mo} ${soles(total)}` : soles(total); })()}</div><div class="sub">${hechos.length} archivo(s) · ${facturas.toLocaleString("es-PE")} facturas</div></div>
         <div class="tarjeta"><div class="etiqueta">Por guardar</div><div class="valor">${cuantos("nuevo", "cambio", "guardando", "error")}</div><div class="sub">nuevos o con cambios</div></div>
         <div class="tarjeta"><div class="etiqueta">Se omiten</div><div class="valor">${cuantos("igual", "repetido")}</div><div class="sub">ya cargados o repetidos: no se duplican</div></div>
         <div class="tarjeta"><div class="etiqueta">Sin cuenta en el portal</div><div class="valor">${sinCuenta}</div><div class="sub">proveedores de lo guardado</div></div>`;
@@ -382,7 +384,7 @@ function vistaCargar(cont, ctx) {
           <td><input type="checkbox" data-incluir="${k}" ${x.incluir ? "checked" : ""} ${puede ? "" : "disabled"}></td>
           <td style="font-size:11.5px"><b>${esc(x.file.name)}</b><br><span class="mono" style="color:var(--gris);font-size:10px">${esc(x.r.lote)}</span></td>
           <td>${fechaCorta(x.r.fechaPago)}</td><td class="num">${x.r.pagos.length}</td><td class="num">${x.r.proveedores}</td>
-          <td class="num neto">${soles(x.r.total)}</td>
+          <td class="num neto">${monto(x.r.total, x.r.moneda)}</td>
           <td>${x.r.avisos.length ? `<span class="etiqueta-estado pendiente" title="${esc(x.r.avisos.slice(0, 5).join(" · "))}">${x.r.avisos.length}</span>` : "—"}</td>
           <td>${ETIQUETA[x.estado]}${x.detalle ? `<br><small style="color:var(--gris)">${esc(x.detalle)}</small>` : ""}</td>
         </tr>`;
@@ -440,7 +442,7 @@ function vistaCargar(cont, ctx) {
   function detalleLote(x, cuentas) {
     const { el } = abrirModal(`
       <div class="modal-cab"><h2>${esc(x.file.name)}</h2><button type="button" class="cerrar" data-cerrar aria-label="Cerrar">${icono("x")}</button></div>
-      <p class="modal-sub">Lote ${esc(x.r.lote)} · abonado el ${fechaCorta(x.r.fechaPago)} · ${x.r.pagos.length} facturas · ${solesS(x.r.total)}</p>
+      <p class="modal-sub">Lote ${esc(x.r.lote)} · abonado el ${fechaCorta(x.r.fechaPago)} · ${x.r.pagos.length} facturas · ${monto(x.r.total, x.r.moneda)}</p>
       ${x.r.avisos.length ? `<div class="aviso amarillo"><b>Avisos (${x.r.avisos.length}):</b><ul>${x.r.avisos.slice(0, 10).map((a) => `<li>${esc(a)}</li>`).join("")}${x.r.avisos.length > 10 ? `<li>…y ${x.r.avisos.length - 10} más</li>` : ""}</ul></div>` : ""}
       <div class="tabla-caja"><table>
         <thead><tr><th>RUC</th><th>Razón social</th><th>Factura</th><th class="num">Bruto</th><th class="num">Ret.</th><th class="num">Detr.</th><th class="num">N.C.</th><th class="num">Neto</th><th>Portal</th></tr></thead>
@@ -456,8 +458,8 @@ function vistaCargar(cont, ctx) {
       $("#pag-det", el).innerHTML = html;
       $("#tb-det", el).innerHTML = visibles.map((p) => `<tr>
         <td class="mono">${esc(p.ruc)}</td><td>${esc(p.razonSocial)}</td><td class="mono">${esc(p.factura)}</td>
-        <td class="num">${soles(p.bruto)}</td><td class="num">${soles(p.retencion)}</td><td class="num">${soles(p.detraccion)}</td>
-        <td class="num">${soles(p.notaCredito)}</td><td class="num neto">${soles(p.neto)}</td>
+        <td class="num">${monto(p.bruto, p.moneda)}</td><td class="num">${monto(p.retencion, p.moneda)}</td><td class="num">${monto(p.detraccion, p.moneda)}</td>
+        <td class="num">${monto(p.notaCredito, p.moneda)}</td><td class="num neto">${monto(p.neto, p.moneda)}</td>
         <td>${cuentas.has(p.ruc) ? `<span class="etiqueta-estado activo">Con cuenta</span>`
           : `<button type="button" class="btn chico" data-crear="${esc(p.ruc)}" data-razon="${esc(p.razonSocial)}">${icono("mas")}Crear cuenta</button>`}</td>
       </tr>`).join("") || `<tr><td colspan="9" class="vacio">El archivo no tiene pagos.</td></tr>`;
@@ -483,7 +485,7 @@ async function guardarLote(x, ctx) {
   }
   await setDoc(doc(db, "lotes", r.lote), {
     lote: r.lote, banco: "BCP", fechaPago: r.fechaPago, facturas: r.pagos.length, proveedores: r.proveedores, total: r.total,
-    resumenProveedores: resumirPorProveedor(r.pagos),
+    resumenProveedores: resumirPorProveedor(r.pagos), moneda: r.moneda,
     archivoTxt: file.webkitRelativePath || file.name, hashTxt: huella, cargadoPor: quien(ctx), cargadoEn: serverTimestamp(),
   });
 }
@@ -518,7 +520,7 @@ async function proveedoresDelLote(id, ctx) {
     const cuentas = await rucsConCuenta(lista.map((x) => x.ruc)).catch(() => new Set());
     const cuerpo = $("#lp-cuerpo", el);
     cuerpo.innerHTML = `
-      <p class="ayuda" style="margin:0 0 10px">Abonado el <b>${fechaCorta(lote.fechaPago)}</b> · ${lista.length} proveedor(es) · ${(lote.facturas ?? lista.reduce((s, x) => s + x.facturas, 0)).toLocaleString("es-PE")} facturas · <b>${solesS(lote.total ?? lista.reduce((s, x) => s + x.total, 0))}</b></p>
+      <p class="ayuda" style="margin:0 0 10px">Abonado el <b>${fechaCorta(lote.fechaPago)}</b> · ${lista.length} proveedor(es) · ${(lote.facturas ?? lista.reduce((s, x) => s + x.facturas, 0)).toLocaleString("es-PE")} facturas · <b>${monto(lote.total ?? lista.reduce((s, x) => s + x.total, 0), lote.moneda)}</b></p>
       <div class="tabla-caja"><table>
         <thead><tr><th>RUC</th><th>Razón social</th><th class="num">Facturas</th><th class="num">Total abonado</th><th>Portal</th><th></th></tr></thead>
         <tbody id="lp-tb"></tbody>
@@ -530,7 +532,7 @@ async function proveedoresDelLote(id, ctx) {
       const { visibles, html } = pag.cortar(lista);
       $("#lp-pag", el).innerHTML = html;
       $("#lp-tb", el).innerHTML = visibles.map((x) => `<tr>
-        <td class="mono">${esc(x.ruc)}</td><td>${esc(x.razonSocial)}</td><td class="num">${x.facturas}</td><td class="num neto">${soles(x.total)}</td>
+        <td class="mono">${esc(x.ruc)}</td><td>${esc(x.razonSocial)}</td><td class="num">${x.facturas}</td><td class="num neto">${monto(x.total, lote.moneda)}</td>
         <td>${cuentas.has(x.ruc) ? `<span class="etiqueta-estado activo">Con cuenta</span>` : `<span class="etiqueta-estado inactivo">Sin cuenta</span>`}</td>
         <td><button type="button" class="btn chico" data-ruc="${esc(x.ruc)}">${icono("recibo")}Ver pagos</button></td>
       </tr>`).join("") || `<tr><td colspan="6" class="vacio">El lote no tiene pagos.</td></tr>`;
@@ -597,7 +599,7 @@ function vistaLotes(cont, ctx) {
   function pintar(docs) {
     $("#tb", cont).innerHTML = docs.map((d) => { const l = d.data(); return `<tr>
       <td class="mono">${esc(d.id)}</td><td>${fechaCorta(l.fechaPago)}</td><td>${esc(l.banco)}</td>
-      <td class="num">${l.facturas ?? "—"}</td><td class="num">${l.proveedores ?? "—"}</td><td class="num neto">${soles(l.total)}</td>
+      <td class="num">${l.facturas ?? "—"}</td><td class="num">${l.proveedores ?? "—"}</td><td class="num neto">${monto(l.total, l.moneda)}</td>
       <td style="font-size:11px">${esc(l.archivoTxt || "")}${l.archivoCsv ? `<br>${esc(l.archivoCsv)}` : ""}</td>
       <td style="font-size:11px">${esc(l.cargadoPor || "")}<br><span style="color:var(--gris)">${fechaHora(l.cargadoEn)}</span></td>
       <td><div class="acciones"><button type="button" class="btn chico oscuro" data-prov="${esc(d.id)}">${icono("edificio")}Proveedores</button>
