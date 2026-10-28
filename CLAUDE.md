@@ -89,9 +89,10 @@ admin se crea a mano en la consola (ver README).
 ## Paginación obligatoria EN EL SERVIDOR (pedido del dueño)
 **Toda lista que se lee de Firestore va paginada en el servidor** con `paginaServidor()`
 (`public/js/paginaServidor.js`): `orden + limit + startAfter` para la página visible y el total —y las
-sumas que hagan falta— con `agregar()` (count/sum), sin descargar los documentos. **Firestore acepta como
-máximo 5 cálculos por consulta de agregación** (con 6 da `invalid-argument`): usar siempre `agregar()`,
-que los reparte en tandas de 5.
+sumas que hagan falta— con `agregar()` (count/sum), sin descargar los documentos. **Usar siempre
+`agregar()`: hace UNA consulta por cálculo** (en paralelo). Varias sumas en una sola consulta exigen un
+índice con todos esos campos juntos (con los índices de un campo da `failed-precondition`, visto en
+producción) y Firestore acepta como máximo 5 cálculos por consulta (con 6 da `invalid-argument`).
 **`sum()` con filtros exige un índice compuesto por cada combinación** (campos del filtro… + el campo que
 se suma, todos ASC; si falta da `failed-precondition`): los de `pagos` ya están en `firestore.indexes.json`
 (filtros × bruto/retencion/detraccion/notaCredito/neto). OJO con el orden: un solo rango (solo fechas, o razón social

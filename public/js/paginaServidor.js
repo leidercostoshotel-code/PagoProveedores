@@ -18,12 +18,11 @@
 import { query, getDocs, limit, startAfter, getAggregateFromServer, count } from "https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore.js";
 import { htmlPagina, leerTam, guardarTam } from "./util.js";
 
-/** Firestore acepta como máximo 5 cálculos (count/sum/average) por consulta de agregación:
-    se reparten en tandas de 5 y se juntan los resultados. */
+/** Un cálculo (count/sum) por consulta de agregación: varias sumas en una sola consulta exigen un
+    índice con TODOS esos campos juntos (y Firestore acepta como máximo 5); una por consulta usa el
+    índice (filtros…, campo) de cada una. Van en paralelo y se juntan los resultados. */
 export async function agregar(q, specs) {
-  const pares = Object.entries(specs), tandas = [];
-  for (let i = 0; i < pares.length; i += 5) tandas.push(Object.fromEntries(pares.slice(i, i + 5)));
-  const res = await Promise.all(tandas.map((t) => getAggregateFromServer(q, t)));
+  const res = await Promise.all(Object.entries(specs).map(([k, s]) => getAggregateFromServer(q, { [k]: s })));
   return Object.assign({}, ...res.map((r) => r.data()));
 }
 
