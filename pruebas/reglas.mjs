@@ -8,7 +8,7 @@
 import { initializeTestEnvironment, assertSucceeds, assertFails } from "@firebase/rules-unit-testing";
 import fs from "fs";
 import { fileURLToPath } from "url";
-import { doc, getDoc, getDocs, setDoc, updateDoc, deleteDoc, collection, query, where, serverTimestamp, getAggregateFromServer, count, sum } from "firebase/firestore";
+import { doc, getDoc, getDocs, setDoc, updateDoc, deleteDoc, collection, query, where, serverTimestamp, getAggregateFromServer, count, sum, writeBatch } from "firebase/firestore";
 
 const [host, port] = (process.env.FIRESTORE_EMULATOR_HOST || "127.0.0.1:8080").split(":");
 const reglas = fs.readFileSync(fileURLToPath(new URL("../firestore.rules", import.meta.url)), "utf8");
@@ -106,6 +106,21 @@ await caso("NO cuenta todos", false, () => getAggregateFromServer(collection(db,
 await caso("reemplaza el que él subió", true, () => setDoc(compRef(db, "20111111111", 2), comp("PA", "20111111111", 2, "proveedor")));
 await caso("NO cambia el que registró el hotel", false, () => setDoc(compRef(db, "20111111111", 1), comp("PA", "20111111111", 1, "proveedor")));
 await caso("NO borra comprobantes", false, () => deleteDoc(compRef(db, "20111111111", 2)));
+const archRef = (db, ruc, numero) => doc(db, "comprobantes_archivos", `${ruc}_01_F001-${numero}`);
+const arch = (uid, extra = {}) => ({ xml: "<Invoice/>", subidoPorUid: uid, subidoEn: serverTimestamp(), ...extra });
+await caso("sube el XML y PDF de su comprobante (en el mismo lote)", true, async () => {
+  const b = writeBatch(db);
+  b.set(compRef(db, "20111111111", 20), comp("PA", "20111111111", 20, "proveedor", { tieneXml: true, tienePdf: true }));
+  b.set(archRef(db, "20111111111", 20), arch("PA", { pdf: "JVBERi0=" }));
+  return b.commit();
+});
+await caso("baja el XML de su comprobante", true, () => getDoc(archRef(db, "20111111111", 20)));
+await caso("NO baja el XML de B", false, () => getDoc(archRef(db, "20222222222", 1)));
+await caso("NO lista los archivos", false, () => getDocs(collection(db, "comprobantes_archivos")));
+await caso("NO pone archivos a un comprobante del hotel", false, () => setDoc(archRef(db, "20111111111", 1), arch("PA")));
+await caso("NO pone archivos sin comprobante", false, () => setDoc(archRef(db, "20111111111", 404), arch("PA")));
+await caso("NO pone archivos a un comprobante de B", false, () => setDoc(archRef(db, "20222222222", 1), arch("PA")));
+await caso("NO agrega campos extra a los archivos", false, () => setDoc(archRef(db, "20111111111", 20), arch("PA", { otro: 1 })));
 
 console.log("Proveedor desactivado");
 db = as("PX");
@@ -136,7 +151,10 @@ await caso("sube un comprobante (XML)", true, () => setDoc(compRef(db, "20222222
 await caso("importa uno del Excel de Gosocket", true, () => setDoc(compRef(db, "20222222222", 61), comp("CON", "20222222222", 61, "gosocket", { estadoSunat: "ACEPTADO", gosocketId: "abc" })));
 await caso("actualiza solo el estado SUNAT", true, () => updateDoc(compRef(db, "20222222222", 60), { estadoSunat: "RECHAZADO", gosocketId: "def" }));
 await caso("NO lo marca como subido por el proveedor", false, () => setDoc(compRef(db, "20222222222", 62), comp("CON", "20222222222", 62, "proveedor")));
+await caso("guarda el XML de un comprobante que sube", true, () => setDoc(doc(db, "comprobantes_archivos", "20222222222_01_F001-60"), { xml: "<Invoice/>", subidoPorUid: "CON", subidoEn: serverTimestamp() }));
+await caso("baja cualquier XML", true, () => getDoc(doc(db, "comprobantes_archivos", "20111111111_01_F001-20")));
 await caso("borra un comprobante", true, () => deleteDoc(compRef(db, "20222222222", 61)));
+await caso("borra sus archivos", true, () => deleteDoc(doc(db, "comprobantes_archivos", "20222222222_01_F001-60")));
 await caso("NO se sube a admin", false, () => updateDoc(doc(db, "usuarios", "CON"), { rol: "admin" }));
 
 console.log("Administrador");

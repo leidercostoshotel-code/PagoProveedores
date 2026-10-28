@@ -36,13 +36,19 @@ del hotel administra todo desde el mismo portal. Login y estilo copiados de la s
   sin duplicar (por ID y `hash`; un Excel de Gosocket sobre uno con XML solo actualiza el estado SUNAT); lista
   paginada en el servidor cruzada con `pagos` (`facturaPago` = letra de la serie + número a 8 dígitos, como el
   TXT) y descarga **Excel con las 53 columnas de Gosocket** (`COLUMNAS_GOSOCKET`, encabezado naranja).
-  Se rechaza: otro RUC (proveedor), otro receptor que `RUC_HOTEL` (config.js, 20297885538), CDR, guías, PDF.
+  Se rechaza: otro RUC (proveedor), otro receptor que `RUC_HOTEL` (config.js, 20297885538); se omiten (sin
+  marcarlos como problema) CDR, guías y archivos que no son XML/PDF/ZIP/XLSX. Acepta **carpetas** (botón "Elegir
+  carpeta" o arrastrarla; entra en subcarpetas). El **PDF** se empareja con el XML del mismo nombre (o el único
+  XML de su ZIP). Al terminar, la lista de subidos **desaparece**: queda un resumen 6 s y solo los rechazados.
+  Cada fila tiene **PDF** y **XML**: el XML original y el PDF van en `comprobantes_archivos/{id}` (nunca se
+  listan; ≤ ~950 KB entre los dos, si no el PDF no se guarda); sin PDF → representación impresa (modal para
+  imprimir/guardar PDF); de Gosocket sin XML → enlaces de Gosocket (solo el hotel).
 - `public/js/sunat.js` — lector UBL 2.1 (Invoice 01/03, CreditNote 07, DebitNote 08; por nombre local, sin
   depender de prefijos), lector del Excel de Gosocket y la fila de descarga. `public/js/zip.js` — leer ZIP/XLSX
   (DecompressionStream) y escribir XLSX sin librerías (la CSP solo deja scripts propios y de gstatic).
 - `functions/index.js` — `verificarBloqueoLogin`, `registrarIntentoFallido`, `limpiarIntentosLogin`, `restablecerClave` (plan Blaze, opcionales).
 - `firestore.rules` — roles con perfil en `usuarios/{uid}`; proveedor solo lee `pagos` con su `ruc`.
-- `pruebas/reglas.mjs` — 74 pruebas de seguridad de las reglas (lo que intentaría alguien con F12 en cada rol);
+- `pruebas/reglas.mjs` — 85 pruebas de seguridad de las reglas (lo que intentaría alguien con F12 en cada rol);
   `npm install && npm run probar:reglas` (emulador, necesita Java). **Correrlas tras tocar `firestore.rules`.**
 - `firebase.json` — cabeceras de seguridad (CSP: scripts solo propios y de gstatic, datos solo a Google;
   sin iframes ajenos; HSTS). Un script o servicio externo nuevo hay que sumarlo a la CSP.
@@ -66,7 +72,9 @@ del hotel administra todo desde el mismo portal. Login y estilo copiados de la s
 - `comprobantes/{RUC_TIPO_SERIE-NÚMERO}` (número sin ceros): ruc, razonSocial, tipo (01|03|07|08), tipoNombre, serie,
   numero, correlativo, comprobante, facturaPago, fechaEmision, fechaVencimiento, fechaRecepcion, moneda, tipoCambio,
   neto, exento, impuestos, total, detraccion, rucReceptor, receptor, refTipo, refValor, estadoSunat, motivoRechazo,
-  gosocketId, items[≤300], origen (proveedor|hotel|gosocket), archivo, hash, subidoPorUid, subidoEn. Reglas: el
+  gosocketId, items[≤300], origen (proveedor|hotel|gosocket), archivo, hash, tieneXml, tienePdf, subidoPorUid,
+  subidoEn. `comprobantes_archivos/{id}`: xml (texto), pdf (base64, opcional), subidoPorUid, subidoEn: se lee de a uno
+  (get por prefijo de RUC), nadie lista; lo escribe quien puede escribir su comprobante (getAfter en el lote). Reglas: el
   proveedor lee por ID solo si empieza con su RUC (así sabe si ya existe), crea con origen "proveedor" y solo
   cambia los que él subió; Contabilidad/admin todo; consulta solo lee (`hasOnly` de campos y el ID debe cuadrar).
 - **Montos con su moneda:** `monto(n, moneda)` (util.js) pone "S/" o "USD"; los totales usan `monedaComun()`

@@ -66,7 +66,8 @@ service cloud.firestore {
       return d.keys().hasOnly(['ruc', 'razonSocial', 'tipo', 'tipoNombre', 'serie', 'numero', 'correlativo', 'comprobante',
           'facturaPago', 'fechaEmision', 'fechaVencimiento', 'fechaRecepcion', 'moneda', 'tipoCambio', 'neto', 'exento',
           'impuestos', 'total', 'detraccion', 'rucReceptor', 'receptor', 'refTipo', 'refValor', 'estadoSunat',
-          'motivoRechazo', 'gosocketId', 'items', 'origen', 'archivo', 'hash', 'subidoPorUid', 'subidoEn'])
+          'motivoRechazo', 'gosocketId', 'items', 'origen', 'archivo', 'hash', 'tieneXml', 'tienePdf',
+          'subidoPorUid', 'subidoEn'])
         && d.ruc is string && d.ruc.matches('[0-9]{11}')
         && d.tipo in ['01', '03', '07', '08'] && d.serie is string && d.numero is int
         && id == d.ruc + '_' + d.tipo + '_' + d.serie + '-' + string(d.numero)
@@ -88,6 +89,22 @@ service cloud.firestore {
         && (gestiona()
           || (esProveedorDe(resource.data.ruc) && resource.data.origen == 'proveedor'
               && request.resource.data.origen == 'proveedor' && subidoAhora()));
+      allow delete: if gestiona();
+    }
+
+    // XML original y PDF de cada comprobante (mismo ID). Nunca se listan: se leen de a uno al descargar.
+    // Quien puede escribir el comprobante escribe sus archivos (getAfter: el lote los guarda juntos).
+    match /comprobantes_archivos/{id} {
+      allow get: if esInterno() || esProveedorDe(id.split('_')[0]);
+      allow list: if false;
+      allow create, update: if request.resource.data.keys().hasOnly(['xml', 'pdf', 'subidoPorUid', 'subidoEn'])
+        && request.resource.data.xml is string && request.resource.data.xml.size() <= 1000000
+        && (!('pdf' in request.resource.data) || request.resource.data.pdf is string)
+        && subidoAhora()
+        && existsAfter(/databases/$(database)/documents/comprobantes/$(id))
+        && (gestiona()
+          || (esProveedorDe(id.split('_')[0])
+              && getAfter(/databases/$(database)/documents/comprobantes/$(id)).data.origen == 'proveedor'));
       allow delete: if gestiona();
     }
 
