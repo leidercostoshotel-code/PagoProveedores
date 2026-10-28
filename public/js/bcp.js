@@ -71,7 +71,7 @@ export async function huellaArchivo(file) {
 /**
  * Interpreta el TXT del banco cruzado con los descuentos (texto del CSV, o
  * un mapa ya armado con leerDescuentos cuando son varios CSV).
- * Devuelve { lote, fechaPago, f, pagos[], avisos[], total, proveedores, integro }.
+ * Devuelve { lote, fechaPago, f, pagos[], avisos[], total, proveedores, integro, moneda }.
  * `integro` = el total y la cantidad del encabezado cuadran con el detalle.
  */
 export function interpretarLote(textoTxt, nombreTxt, descuentos) {
@@ -124,5 +124,7 @@ export function interpretarLote(textoTxt, nombreTxt, descuentos) {
     if (Math.abs(totalCab - total) >= 0.005) { integro = false; avisos.unshift(`El total del encabezado (${totalCab.toFixed(2)}) no cuadra con la suma del detalle (${total.toFixed(2)}).`); }
     if (cantCab && cantCab !== pagos.length) { integro = false; avisos.unshift(`El encabezado dice ${cantCab} pagos y el detalle trae ${pagos.length}.`); }
   }
-  return { lote, fechaPago, f, pagos, avisos, total, proveedores, integro };
+  // Moneda del lote: la del encabezado (S/ o US); sin encabezado, la de sus pagos.
+  const moneda = MONEDAS[cab.substr(CABECERA.moneda[0] - 1, 2)] || (pagos.length && pagos.every((p) => p.moneda === "USD") ? "USD" : "PEN");
+  return { lote, fechaPago, f, pagos, avisos, total, proveedores, integro, moneda };
 }

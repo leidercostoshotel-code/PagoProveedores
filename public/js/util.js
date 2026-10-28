@@ -44,6 +44,14 @@ export function icono(nombre, clase = "") {
 const fmtSoles = new Intl.NumberFormat("es-PE", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 export const soles = (n) => fmtSoles.format(Number(n) || 0);
 export const solesS = (n) => `S/ ${soles(n)}`;
+/** Símbolo de la moneda de un pago: "USD" para dólares; "S/" para soles (también si no dice). */
+export const simbolo = (moneda) => (moneda === "USD" ? "USD" : "S/");
+export const monto = (n, moneda) => `${simbolo(moneda)} ${soles(n)}`;
+/** Moneda para los totales de una lista de pagos: la de todos si coinciden; "" si se mezclan. */
+export function monedaComun(lista) {
+  const m = new Set(lista.map((p) => simbolo(p.moneda)));
+  return m.size > 1 ? "" : [...m][0] || "S/";
+}
 const MESES = ["ene", "feb", "mar", "abr", "may", "jun", "jul", "ago", "set", "oct", "nov", "dic"];
 export const NOMBRES_MES = ["Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio", "Julio", "Agosto", "Setiembre", "Octubre", "Noviembre", "Diciembre"];
 /** "2026-10-24" → "24 oct 2026" */

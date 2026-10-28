@@ -49,11 +49,13 @@ del hotel administra todo desde el mismo portal. Login y estilo copiados de la s
 - `usuarios/{uid}`: rol (admin|contabilidad|consulta|proveedor), activo, nombre, email, ruc y razonSocial
   (proveedor), contacto, telefono, debeCambiarClave, ultimoIngreso, creadoPor/creadoEn.
 - `pagos/{RUC_FACTURA_AAAAMMDD}`: ruc, razonSocial, factura, fechaPago (YYYY-MM-DD), banco, cuentaAbono,
-  bruto, retencion, detraccion, notaCredito, neto, lote, cargadoEn (quién cargó va solo en `lotes`: el
+  bruto, retencion, detraccion, notaCredito, neto, moneda (PEN|USD; sin campo = PEN), lote, cargadoEn (quién cargó va solo en `lotes`: el
   proveedor puede ver su documento completo con F12).
 - `lotes/{lote}`: lote, banco, fechaPago, facturas, proveedores, total, archivoTxt, hashTxt (SHA-256 del TXT),
   resumenProveedores [{ruc, razonSocial, facturas, total}] (Lotes → "Proveedores"; un lote viejo sin él se
-  arma con sus pagos al abrirlo), cargadoPor, cargadoEn.
+  arma con sus pagos al abrirlo), moneda (la del encabezado del TXT), cargadoPor, cargadoEn.
+- **Montos con su moneda:** `monto(n, moneda)` (util.js) pone "S/" o "USD"; los totales usan `monedaComun()`
+  de las filas de la página (si hay soles y dólares juntos, van sin símbolo y con un aviso).
 
 ## Carga de TXT sin duplicar (carpeta completa)
 "Cargar lotes" acepta una carpeta (input `webkitdirectory` o arrastrarla; entra en subcarpetas) o varios

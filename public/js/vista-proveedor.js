@@ -9,7 +9,7 @@ import {
   collection, query, where, orderBy, limit, getDocs, count, sum,
 } from "https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore.js";
 import {
-  $, esc, icono, soles, solesS, fechaCorta, enmascarar, NOMBRES_MES,
+  $, esc, icono, soles, monto, monedaComun, fechaCorta, enmascarar, NOMBRES_MES,
   abrirModal, descargarCSV, notificar, confirmar,
 } from "./util.js";
 import { paginaServidor, agregar } from "./paginaServidor.js";
@@ -108,23 +108,25 @@ function vistaPagos(cont, ctx, { ultimo, primero }) {
     pintar: (docs, st) => {
       docsPagina = docs.map((d) => ({ id: d.id, ...d.data() }));
       const a = st.agg;
-      const m = (k) => (st.sumasOk ? soles(a[k]) : "—");
+      // Totales con la moneda de las facturas; si hay soles y dólares juntos, sin símbolo y con aviso.
+      const mon = monedaComun(docsPagina), mezcla = !mon;
+      const m = (k) => (st.sumasOk ? (mon ? `${mon} ${soles(a[k])}` : soles(a[k])) : "—");
       $("#kpis", cont).innerHTML = `
-        <div class="tarjeta destacada"><div class="etiqueta">Total abonado</div><div class="valor">${st.sumasOk ? solesS(a.neto) : "—"}</div><div class="sub">${esc(actual.periodo)}</div></div>
+        <div class="tarjeta destacada"><div class="etiqueta">Total abonado</div><div class="valor">${m("neto")}</div><div class="sub">${esc(actual.periodo)}</div></div>
         <div class="tarjeta"><div class="etiqueta">Facturas pagadas</div><div class="valor">${(st.total || 0).toLocaleString("es-PE")}</div><div class="sub">en el periodo elegido</div></div>
         <div class="tarjeta"><div class="etiqueta">Retenciones</div><div class="valor">${m("retencion")}</div><div class="sub">Detracciones: ${m("detraccion")}</div></div>
-        <div class="tarjeta"><div class="etiqueta">Último abono</div><div class="valor">${ultimo ? fechaCorta(ultimo.fechaPago) : "—"}</div><div class="sub">${ultimo ? `${esc(ultimo.factura)} · ${solesS(ultimo.neto)}` : "Aún no hay pagos"}</div></div>`;
+        <div class="tarjeta"><div class="etiqueta">Último abono</div><div class="valor">${ultimo ? fechaCorta(ultimo.fechaPago) : "—"}</div><div class="sub">${ultimo ? `${esc(ultimo.factura)} · ${monto(ultimo.neto, ultimo.moneda)}` : "Aún no hay pagos"}</div></div>`;
       $("#tb", cont).innerHTML = docsPagina.map((p, i) => `
         <tr class="clic" data-i="${i}" tabindex="0">
           <td class="mono">${esc(p.factura)}</td><td>${fechaCorta(p.fechaPago)}</td><td>${esc(p.banco)}</td><td class="mono">${esc(enmascarar(p.cuentaAbono))}</td>
-          <td class="num">${soles(p.bruto)}</td><td class="num descuento">${p.retencion ? soles(p.retencion) : "—"}</td>
-          <td class="num descuento">${p.detraccion ? soles(p.detraccion) : "—"}</td><td class="num descuento">${p.notaCredito ? soles(p.notaCredito) : "—"}</td>
-          <td class="num neto">${soles(p.neto)}</td>
+          <td class="num">${monto(p.bruto, p.moneda)}</td><td class="num descuento">${p.retencion ? monto(p.retencion, p.moneda) : "—"}</td>
+          <td class="num descuento">${p.detraccion ? monto(p.detraccion, p.moneda) : "—"}</td><td class="num descuento">${p.notaCredito ? monto(p.notaCredito, p.moneda) : "—"}</td>
+          <td class="num neto">${monto(p.neto, p.moneda)}</td>
         </tr>`).join("") || `<tr><td colspan="9" class="vacio">No hay pagos registrados${ultimo ? " con estos filtros" : " para tu RUC todavía"}.</td></tr>`;
       $("#tf", cont).innerHTML = st.total ? `<tr><td colspan="4">Total (${st.total.toLocaleString("es-PE")})</td>
         <td class="num">${m("bruto")}</td><td class="num">${m("retencion")}</td>
         <td class="num">${m("detraccion")}</td><td class="num">${m("notaCredito")}</td>
-        <td class="num">${m("neto")}</td></tr>` : "";
+        <td class="num">${m("neto")}</td></tr>${mezcla ? `<tr><td colspan="9" class="ayuda">Hay pagos en soles y en dólares: los totales suman ambas monedas.</td></tr>` : ""}` : "";
     },
     alError: (err) => {
       console.error("Portal: no se pudieron leer los pagos", err);
@@ -202,7 +204,7 @@ function vistaResumen(cont, ctx, { ultimo, primero }) {
       if (!vivo || $("#f-anio", cont).value !== anio) return;
       const con = meses.filter((x) => x.total).reverse();
       const sinSumas = con.some((x) => x.sinSumas);
-      const mf = (v) => (sinSumas ? "—" : soles(v));
+      const mf = (v) => (sinSumas ? "—" : monto(v, ultimo?.moneda));   // moneda de sus pagos (la del último abono)
       const t = (k) => meses.reduce((s, x) => s + (Number(x[k]) || 0), 0);
       $("#tb", cont).innerHTML = con.map((x) => `<tr>
         <td>${NOMBRES_MES[x.mes]} ${esc(anio)}</td><td class="num">${x.total}</td>
@@ -241,12 +243,12 @@ export function constancia(p, perfil = {}) {
         <dt>Fecha de abono</dt><dd>${fechaCorta(p.fechaPago)}</dd>
         <dt>Banco</dt><dd>${esc(p.banco)}</dd>
         <dt>Cuenta de abono</dt><dd class="mono">${esc(enmascarar(p.cuentaAbono))}</dd>
-        <dt>Importe bruto</dt><dd class="mono">${soles(p.bruto)}</dd>
-        <dt>Retención</dt><dd class="mono descuento">− ${soles(p.retencion)}</dd>
-        <dt>Detracción</dt><dd class="mono descuento">− ${soles(p.detraccion)}</dd>
-        <dt>Nota de crédito</dt><dd class="mono descuento">− ${soles(p.notaCredito)}</dd>
+        <dt>Importe bruto</dt><dd class="mono">${monto(p.bruto, p.moneda)}</dd>
+        <dt>Retención</dt><dd class="mono descuento">− ${monto(p.retencion, p.moneda)}</dd>
+        <dt>Detracción</dt><dd class="mono descuento">− ${monto(p.detraccion, p.moneda)}</dd>
+        <dt>Nota de crédito</dt><dd class="mono descuento">− ${monto(p.notaCredito, p.moneda)}</dd>
       </dl>
-      <div class="total"><span>Neto abonado</span><span class="mono">${solesS(p.neto)}</span></div>
+      <div class="total"><span>Neto abonado</span><span class="mono">${monto(p.neto, p.moneda)}</span></div>
       <p class="ayuda">Lote ${esc(p.lote || "—")}. Documento informativo generado desde el Portal de Proveedores.</p>
       <div class="modal-pie no-imprimir">
         <button type="button" class="btn" data-cerrar>Cerrar</button>
