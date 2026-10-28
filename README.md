@@ -116,8 +116,11 @@ el detalle, ese archivo queda en "Revisar".
 Pestaña **Comprobantes** (hotel) y **Mis comprobantes** (proveedor). Se suben **XML de SUNAT** (UBL 2.1: facturas,
 boletas, notas de crédito y débito) o un **ZIP** con varios; Contabilidad además puede subir el **Excel de Gosocket**
 (Inbox → Recibidos → Exportar). Se guarda solo y nunca se duplica (cada comprobante es RUC + tipo + serie-número).
-Se rechazan: XML de otro RUC (proveedor), dirigidos a otro receptor que el hotel (`RUC_HOTEL` en `config.js`),
-constancias CDR, guías de remisión y PDF. Cada comprobante se cruza con los pagos de los TXT: `F001-46937` del
+También se puede subir **una carpeta completa** (entra en las subcarpetas); el **PDF** de cada factura se guarda
+si va junto a su XML con el mismo nombre. Se rechazan los XML de otro RUC (proveedor) o dirigidos a otro receptor
+que el hotel (`RUC_HOTEL` en `config.js`); las constancias CDR y las guías de remisión se omiten. Al terminar, la
+lista de subidos desaparece y solo quedan los rechazados. Cada comprobante se descarga en **PDF** (el original o
+la representación impresa) y **XML**. Cada comprobante se cruza con los pagos de los TXT: `F001-46937` del
 XML es `F00046937` en el TXT. **Excel (formato Gosocket)** descarga lo filtrado con las 53 columnas de Gosocket
 (con "Pagado" y "Fecha Pago" llenos). Todo se lee en el navegador: no necesita plan Blaze. Tras publicar esta
 parte, publica también `reglas` (reglas e índices nuevos).

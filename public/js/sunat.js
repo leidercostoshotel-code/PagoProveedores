@@ -58,8 +58,8 @@ export function leerXmlSunat(textoXml) {
   const x = new DOMParser().parseFromString(textoXml, "application/xml");
   if (x.getElementsByTagName("parsererror").length) return { ok: false, motivo: "El XML está dañado o incompleto." };
   const raiz = x.documentElement, tipoRaiz = raiz.localName;
-  if (tipoRaiz === "ApplicationResponse") return { ok: false, motivo: "Es la constancia (CDR) de SUNAT, no el comprobante: se omite." };
-  if (tipoRaiz === "DespatchAdvice") return { ok: false, motivo: "Es una guía de remisión, no un comprobante de pago." };
+  if (tipoRaiz === "ApplicationResponse") return { ok: false, omitir: true, motivo: "Constancia (CDR) de SUNAT: no es el comprobante." };
+  if (tipoRaiz === "DespatchAdvice") return { ok: false, omitir: true, motivo: "Guía de remisión: no es un comprobante de pago." };
   if (!["Invoice", "CreditNote", "DebitNote"].includes(tipoRaiz)) return { ok: false, motivo: "No es un comprobante electrónico SUNAT (UBL 2.1)." };
 
   const tipo = tipoRaiz === "CreditNote" ? "07" : tipoRaiz === "DebitNote" ? "08" : texto(hijo(raiz, "InvoiceTypeCode")).padStart(2, "0");
@@ -158,7 +158,7 @@ export function filasGosocket(filas) {
   return filas.slice(1).filter((f) => f.some((c) => c !== "")).map((f) => {
     const tipo = v(f, "Número Tipo Documento").padStart(2, "0"), ruc = v(f, "Id Emisor");
     const nombre = `${v(f, "Serie")}-${v(f, "Correlativo")} · ${v(f, "Nombre Emisor")}`;
-    if (!TIPOS[tipo]) return { ok: false, nombre, motivo: `${v(f, "Tipo Documento") || "Tipo " + tipo}: no es un comprobante de pago.` };
+    if (!TIPOS[tipo]) return { ok: false, omitir: true, nombre, motivo: `${v(f, "Tipo Documento") || "Tipo " + tipo}: no es un comprobante de pago.` };
     if (!/^\d{11}$/.test(ruc)) return { ok: false, nombre, motivo: "Sin RUC de emisor válido." };
     const k = claves(ruc, tipo, v(f, "Serie"), v(f, "Correlativo"));
     if (!/^[A-Z0-9]{4}$/.test(k.serie) || !k.numero) return { ok: false, nombre, motivo: "Serie o correlativo no válidos." };
