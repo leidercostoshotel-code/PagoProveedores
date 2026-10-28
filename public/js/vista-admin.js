@@ -15,7 +15,7 @@ import {
   paginador,
 } from "./util.js";
 import { ROLES_INTERNOS, etiquetaRol, puedeGestionar } from "./roles.js";
-import { leerArchivo, interpretarLote, leerDescuentos, huellaArchivo } from "./bcp.js";
+import { leerArchivo, interpretarLote, leerDescuentos, huellaArchivo, formasFactura } from "./bcp.js";
 import { constancia } from "./vista-proveedor.js";
 import { paginaServidor } from "./paginaServidor.js";
 import { DOMINIO_PROVEEDORES } from "./config.js";
@@ -114,7 +114,7 @@ function vistaPagos(cont, ctx) {
         <label class="campo"><span>Desde</span><input class="input chico" type="date" id="f-desde" value="${p.lote ? "" : p.fecha || hace90}"></label>
         <label class="campo"><span>Hasta</span><input class="input chico" type="date" id="f-hasta" value="${p.lote ? "" : p.fecha || hoyISO()}"></label>
         <label class="campo"><span>Buscar por</span><select class="select chico" id="f-tipo">
-          <option value="" ${tipoIni ? "" : "selected"}>Todas (por fechas)</option>
+          <option value="" ${tipoIni ? "" : "selected"}>Automático</option>
           <option value="ruc" ${tipoIni === "ruc" ? "selected" : ""}>RUC</option>
           <option value="razon">Razón social (cómo empieza)</option>
           <option value="factura">N° de factura</option>
@@ -137,7 +137,10 @@ function vistaPagos(cont, ctx) {
      factura y lote buscan en todas las fechas (Firestore no combina dos rangos). */
   let filtroActual = null;
   function armarConsulta() {
-    const tipo = $("#f-tipo", cont).value, texto = $("#f-buscar", cont).value.trim();
+    const texto = $("#f-buscar", cont).value.trim();
+    // "Automático": se deduce de lo escrito (sin texto = todas las facturas de las fechas).
+    const tipo = $("#f-tipo", cont).value || (!texto ? "" : /^\d+$/.test(texto) ? "ruc" : /^BCP_/i.test(texto) ? "lote"
+      : /^[FBE][A-Z0-9]{0,3}-?\d+$/i.test(texto) ? "factura" : "razon");
     const desde = $("#f-desde", cont).value, hasta = $("#f-hasta", cont).value;
     const col = collection(db, "pagos");
     const rango = [...(desde ? [where("fechaPago", ">=", desde)] : []), ...(hasta ? [where("fechaPago", "<=", hasta)] : [])];
@@ -152,7 +155,11 @@ function vistaPagos(cont, ctx) {
       const T = texto.toUpperCase();
       return { col, filtros: [where("razonSocial", ">=", T), where("razonSocial", "<=", `${T}`)], orden: [orderBy("razonSocial"), orderBy("fechaPago", "desc")], desc: `Razón social que empieza con “${T}” (todas las fechas).` };
     }
-    if (tipo === "factura") return { col, filtros: [where("factura", "==", texto.toUpperCase())], orden: [orderBy("fechaPago", "desc")], desc: `Factura ${texto.toUpperCase()} (todas las fechas).` };
+    if (tipo === "factura") {
+      // El TXT del banco guarda "F00046937"; en SAP se ve "F001-46937": se buscan las dos formas.
+      const formas = formasFactura(texto);
+      return { col, filtros: [where("factura", "in", formas)], orden: [orderBy("fechaPago", "desc")], desc: `Factura ${formas[0]} (todas las fechas).` };
+    }
     if (tipo === "lote") return { col, filtros: [where("lote", "==", texto)], orden: [orderBy("fechaPago", "desc")], desc: `Pagos del lote ${texto}.` };
     return { col, filtros: rango, orden: [orderBy("fechaPago", "desc")], desc: desc[""] };
   }

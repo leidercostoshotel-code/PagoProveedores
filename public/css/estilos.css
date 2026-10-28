@@ -266,6 +266,37 @@ td.vacio { padding: 28px; text-align: center; color: var(--gris); }
   .tarjeta-ingreso { animation: none; }
 }
 @media (max-width: 640px) {
+  /* Encabezado: no se queda pegado (ocupaba un cuarto de la pantalla) y las pestañas van en una fila
+     que se desliza de lado. */
+  .encabezado { position: relative; }
+  .encabezado .contenedor { padding-top: 10px; padding-bottom: 8px; }
+  .fila-sup { gap: 8px; }
+  .usuario-app { width: 100%; justify-content: space-between; }
+  .chip-usuario { flex: 1 1 0; min-width: 0; }
+  .pestanas { flex-wrap: nowrap; overflow-x: auto; margin: 10px -16px 0; padding: 0 16px 4px; scrollbar-width: none; }
+  .pestanas::-webkit-scrollbar { display: none; }
+  .pestana { flex: 0 0 auto; }
+  main.contenedor { padding-top: 12px; }
+  .panel { padding: 12px; }
+  .barra-filtros .campo:not(.crece) { flex: 1 1 140px; }
+  .barra-filtros .campo .input.chico, .barra-filtros .campo .select.chico { width: 100%; }
+  .barra-filtros > .btn { flex: 1 1 100%; justify-content: center; }
+  /* Tablas como tarjetas: una por fila, cada dato con su título (data-etq lo pone app.js). */
+  .tabla-caja { overflow: visible; border: 0; background: transparent; }
+  .tabla-caja table, .tabla-caja tbody, .tabla-caja tfoot, .tabla-caja tr, .tabla-caja td { display: block; width: 100%; }
+  .tabla-caja thead { display: none; }
+  .tabla-caja tr { margin-bottom: 8px; padding: 6px 12px; border: 1px solid var(--linea); border-radius: 8px; background: #fff; }
+  .tabla-caja tfoot tr { background: #F4F7FA; border-width: 2px; }
+  .tabla-caja td { display: flex; justify-content: space-between; align-items: center; gap: 12px; padding: 5px 0; border: 0; text-align: right; overflow-wrap: anywhere; }
+  .tabla-caja td + td { border-top: 1px dashed #E3E9F0; }
+  .tabla-caja tfoot td { border-top: 0; background: transparent; }
+  .tabla-caja td::before { content: attr(data-etq); flex: 0 0 auto; max-width: 45%; text-align: left; font-size: 10px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; color: var(--gris); }
+  .tabla-caja td[data-etq=""]::before, .tabla-caja td:not([data-etq])::before { display: none; }
+  .tabla-caja td[data-etq=""] { justify-content: flex-start; text-align: left; }
+  .tabla-caja td:empty, .tabla-caja td[data-sin-dato] { display: none; }
+  .tabla-caja tr > td:first-child { border-top: 0; }
+  .tabla-caja td.vacio { display: block; padding: 20px 0; text-align: center; }
+  .tabla-caja td .acciones { justify-content: flex-end; }
   .marca-app .logo30-enc { display: none; }
   .tarjeta .valor { font-size: 18px; }
   .chip-usuario { max-width: 100%; }
