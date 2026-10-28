@@ -98,7 +98,8 @@ se suma, todos ASC; si falta da `failed-precondition`): los de `pagos` ya están
 fechaPago), como lo pide Firebase; con igualdades = (igualdades…, fechaPago, campo sumado). La consola del
 SDK está en `setLogLevel("silent")` (firebase.js): los errores se muestran en pantalla, no en F12. Un filtro o una suma nueva suma sus índices.
 `paginaServidor` pide el conteo y las sumas por separado: si las sumas fallan (índice aún creándose tras
-publicar), la lista carga igual y los totales salen "—" (`st.sumasOk`).
+publicar), la lista carga igual y los totales salen "—" (`st.sumasOk`); si todo cabe en la primera página
+(lo normal para un proveedor) los suma ahí mismo con las filas ya leídas (la clave del agregado = el campo).
 25/50/100 por página, se recuerda por lista; `cargar(true)` al cambiar filtros, `recargar()` tras editar.
 - Admin: **Pagos** (fechas; o RUC + fechas; o razón social / factura / lote en todas las fechas, porque
   Firestore no combina dos rangos; totales de la consulta con sum; "Buscar por: Automático" deduce el tipo
