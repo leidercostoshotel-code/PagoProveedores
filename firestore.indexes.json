@@ -695,6 +695,76 @@
           "order": "ASCENDING"
         }
       ]
+    },
+    {
+      "collectionGroup": "pagos",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "bruto",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "razonSocial",
+          "order": "ASCENDING"
+        }
+      ]
+    },
+    {
+      "collectionGroup": "pagos",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "retencion",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "razonSocial",
+          "order": "ASCENDING"
+        }
+      ]
+    },
+    {
+      "collectionGroup": "pagos",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "detraccion",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "razonSocial",
+          "order": "ASCENDING"
+        }
+      ]
+    },
+    {
+      "collectionGroup": "pagos",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "notaCredito",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "razonSocial",
+          "order": "ASCENDING"
+        }
+      ]
+    },
+    {
+      "collectionGroup": "pagos",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "neto",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "razonSocial",
+          "order": "ASCENDING"
+        }
+      ]
     }
   ],
   "fieldOverrides": []
