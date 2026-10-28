@@ -46,6 +46,12 @@ export function leerDescuentos(texto) {
 /** Número del comprobante sin serie ni ceros: "F001-00452" → 452, "F00046937" → 46937. */
 const numeroComprobante = (f) => { const m = String(f).match(/(\d+)\D*$/); return m ? Number(m[1]) : NaN; };
 
+/** Formas de buscar una factura: tal cual y como la guarda el TXT ("F001-46937" → "F00046937"). */
+export function formasFactura(texto) {
+  const F = String(texto).toUpperCase().replace(/\s/g, ""), m = F.match(/^([FBE])[A-Z0-9]*-(\d+)$/);
+  return [...new Set([F, ...(m ? [`${m[1]}${m[2].padStart(8, "0")}`] : [])])];
+}
+
 /** ID del documento en "pagos": RUC + comprobante + fecha de abono (así nunca se duplica). */
 export const idPago = (ruc, factura, f) => `${ruc}_${factura.replace(/[^\w-]/g, "")}_${f}`;
 

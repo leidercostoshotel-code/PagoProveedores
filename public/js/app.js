@@ -272,6 +272,30 @@ function irA(id, params = {}) {
   window.scrollTo({ top: 0 });
 }
 
+/* En el celular las tablas se ven como tarjetas (estilos.css): cada celda lleva en data-etq el título de su
+   columna, tomado del encabezado de la tabla (respeta colspan). Vale para toda tabla nueva sin tocarla. */
+function etiquetarTablas() {
+  for (const t of document.querySelectorAll(".tabla-caja table")) {
+    const titulos = [...t.querySelectorAll("thead th")].map((th) => th.textContent.trim());
+    for (const tr of t.querySelectorAll("tbody tr, tfoot tr")) {
+      let col = 0;
+      for (const td of tr.children) {
+        if (!td.hasAttribute("data-etq")) {
+          td.dataset.etq = td.colSpan > 1 ? "" : titulos[col] || "";
+          if (td.textContent.trim() === "—") td.dataset.sinDato = "";   // en el celular no se muestra
+        }
+        col += td.colSpan || 1;
+      }
+    }
+  }
+}
+let etiquetaPendiente = false;
+new MutationObserver(() => {
+  if (etiquetaPendiente) return;
+  etiquetaPendiente = true;
+  requestAnimationFrame(() => { etiquetaPendiente = false; etiquetarTablas(); });
+}).observe(document.body, { childList: true, subtree: true });
+
 // Sombra del encabezado al bajar (como el encabezado inteligente de la suite).
 window.addEventListener("scroll", () => $("#encabezado").classList.toggle("con-sombra", window.scrollY > 4), { passive: true });
 

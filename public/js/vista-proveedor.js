@@ -13,6 +13,7 @@ import {
   abrirModal, descargarCSV, notificar, confirmar,
 } from "./util.js";
 import { paginaServidor, agregar } from "./paginaServidor.js";
+import { formasFactura } from "./bcp.js";
 import { CORREO_CONTABILIDAD, EMPRESA } from "./config.js";
 
 export function pestanas() {
@@ -77,7 +78,7 @@ function vistaPagos(cont, ctx, { ultimo, primero }) {
         <label class="campo"><span>Mes</span><select class="select chico" id="f-mes">
           <option value="">Todos</option>${NOMBRES_MES.map((m, i) => `<option value="${pad2(i + 1)}">${m}</option>`).join("")}
         </select></label>
-        <label class="campo crece"><span>Buscar factura (número completo)</span><input class="input chico" style="width:100%" id="f-buscar" placeholder="F001-00452" autocomplete="off"></label>
+        <label class="campo crece"><span>Buscar factura (número completo)</span><input class="input chico" style="width:100%" id="f-buscar" placeholder="F001-46937 o F00046937" autocomplete="off"></label>
       </div>
       <div class="tabla-caja"><table>
         <thead><tr><th>Factura</th><th>Fecha de abono</th><th>Banco</th><th>Cuenta</th><th class="num">Bruto</th>
@@ -91,7 +92,7 @@ function vistaPagos(cont, ctx, { ultimo, primero }) {
   function consulta() {
     const anio = $("#f-anio", cont).value, mes = $("#f-mes", cont).value, fac = $("#f-buscar", cont).value.trim().toUpperCase();
     const base = [where("ruc", "==", ruc)];
-    if (fac) return { col: colPagos(), filtros: [...base, where("factura", "==", fac)], orden: [orderBy("fechaPago", "desc")], periodo: `Factura ${fac}` };
+    if (fac) return { col: colPagos(), filtros: [...base, where("factura", "in", formasFactura(fac))], orden: [orderBy("fechaPago", "desc")], periodo: `Factura ${fac}` };
     let desde = "", hasta = "";
     if (anio && mes) { desde = `${anio}-${mes}-01`; hasta = finMes(Number(anio), Number(mes)); }
     else if (anio) { desde = `${anio}-01-01`; hasta = `${anio}-12-31`; }

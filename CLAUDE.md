@@ -13,6 +13,9 @@ del hotel administra todo desde el mismo portal. Login y estilo copiados de la s
   `.pantalla-fondo` (ingreso) es `position: fixed` con su propio scroll: en el celular no se mueve al
   ocultarse la barra del navegador ni con el teclado; en pantallas táctiles las casillas van a 16 px (con
   menos el iPhone hace zoom al tocarlas). No volver a `min-height: 100vh` ahí.
+  **Celular (≤ 640 px):** el encabezado no es fijo y las pestañas se deslizan de lado; toda `.tabla-caja` se
+  ve como tarjetas (una por fila, cada dato con su título): `etiquetarTablas()` en app.js pone `data-etq` a
+  cada celda con el título de su columna (y oculta las que dicen "—"), así una tabla nueva no necesita nada.
 - `public/js/config.js` — configuración de Firebase (placeholders `TU_...` que reemplaza el workflow con los secrets), dominio de proveedores, correo de Contabilidad, minutos de inactividad.
 - `public/js/firebase.js` — Auth/Firestore/Functions: `login()` con bloqueo, `cambiarPassword()`, `crearUsuario()` (segunda instancia de Auth), `restablecerClave()`.
 - `public/js/app.js` — flujo de pantallas: carga → ingreso → perfil → cambio de clave obligatorio → app por rol;
@@ -98,7 +101,9 @@ SDK está en `setLogLevel("silent")` (firebase.js): los errores se muestran en p
 publicar), la lista carga igual y los totales salen "—" (`st.sumasOk`).
 25/50/100 por página, se recuerda por lista; `cargar(true)` al cambiar filtros, `recargar()` tras editar.
 - Admin: **Pagos** (fechas; o RUC + fechas; o razón social / factura / lote en todas las fechas, porque
-  Firestore no combina dos rangos; totales de la consulta con sum), **Lotes**, **Proveedores** (búsqueda
+  Firestore no combina dos rangos; totales de la consulta con sum; "Buscar por: Automático" deduce el tipo
+  de lo escrito: 11 dígitos = RUC, BCP_… = lote, F/B/E + número = factura, lo demás = razón social; la
+  factura se busca tal cual y como la guarda el TXT, `formasFactura()` en bcp.js: "F001-46937" ↔ "F00046937"), **Lotes**, **Proveedores** (búsqueda
   por cómo empieza el RUC o la razón social en MAYÚSCULAS), **Usuarios**.
 - Proveedor: **Mis pagos** (año/mes o factura exacta; totales con sum; "último abono" y años del filtro
   con 2 lecturas) y **Resumen por mes** (un año por vez = 12 agregaciones).
