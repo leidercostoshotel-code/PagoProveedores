@@ -21,7 +21,7 @@ import {
 import { puedeGestionar } from "./roles.js";
 import { huellaArchivo } from "./bcp.js";
 import { leerZip, leerXlsx, textoXml, descargarXlsx } from "./zip.js";
-import { TIPOS, leerXmlSunat, leerNumero, filasGosocket, COLUMNAS_GOSOCKET, filaGosocket, enlaceGosocket } from "./sunat.js";
+import { TIPOS, leerXmlSunat, leerRetencion, leerNumero, facturaPagoDe, filasGosocket, COLUMNAS_GOSOCKET, filaGosocket, enlaceGosocket } from "./sunat.js";
 import { constancia } from "./vista-proveedor.js";
 import { paginaServidor } from "./paginaServidor.js";
 import { RUC_HOTEL } from "./config.js";
@@ -46,9 +46,12 @@ function chipPago(c, pago) {
   return pago ? chip("activo", `Pagado ${fechaCorta(pago.fechaPago)}`) : chip("pendiente", "Pendiente de pago");
 }
 
+// Se calcula (no se usa el guardado: los primeros se guardaron con la letra de la serie, no la del tipo).
+const clavePago = (c) => facturaPagoDe(c.tipo, c.serie, c.numero);
+
 /** Pagos de una lista de comprobantes: Map "RUC|FACTURA_DEL_TXT" → pago (el más reciente). */
 async function pagosDe(lista, rucProveedor) {
-  const mapa = new Map(), facturas = [...new Set(lista.map((c) => c.facturaPago).filter(Boolean))];
+  const mapa = new Map(), facturas = [...new Set(lista.map(clavePago).filter(Boolean))];
   for (let i = 0; i < facturas.length; i += 30) {
     const filtros = [where("factura", "in", facturas.slice(i, i + 30))];
     if (rucProveedor) filtros.unshift(where("ruc", "==", rucProveedor));   // el proveedor solo puede consultar los suyos
@@ -60,15 +63,15 @@ async function pagosDe(lista, rucProveedor) {
   }
   return mapa;
 }
-const pagoDe = (mapa, c) => mapa.get(`${c.ruc}|${c.facturaPago}`) || null;
+const pagoDe = (mapa, c) => mapa.get(`${c.ruc}|${clavePago(c)}`) || null;
 
 /* ── Archivos: XML original y PDF ────────────────────────────────── */
 const aBase64 = (bytes) => { let t = ""; for (let i = 0; i < bytes.length; i += 0x8000) t += String.fromCharCode(...bytes.subarray(i, i + 0x8000)); return btoa(t); };
-const deBase64 = (b64) => Uint8Array.from(atob(b64), (ch) => ch.charCodeAt(0));
+export const deBase64 = (b64) => Uint8Array.from(atob(b64), (ch) => ch.charCodeAt(0));
 const bytesTexto = (t) => new TextEncoder().encode(t).length;
 // Nombre SUNAT: RUC-TIPO-SERIE-NÚMERO (8 dígitos).
 const nombreSunat = (c, ext) => `${c.ruc}-${c.tipo}-${c.serie}-${String(c.numero).padStart(8, "0")}.${ext}`;
-function descargarBlob(blob, nombre) {
+export function descargarBlob(blob, nombre) {
   const a = Object.assign(document.createElement("a"), { href: URL.createObjectURL(blob), download: nombre });
   document.body.appendChild(a);
   a.click();
@@ -140,27 +143,36 @@ function representacion(c) {
   });
 }
 
+/** Panel para subir archivos (carpeta o archivos, arrastrar y soltar). `suf` distingue los id de cada pestaña. */
+export function htmlCarga(suf, { titulo, texto, detalle, acepta }) {
+  return `<div class="panel">
+      <div class="panel-titulo"><div><h2>${titulo}</h2><p>${texto}</p></div></div>
+      <div class="zona-archivo" id="zona-${suf}">
+        ${icono("subir")}<b>Arrastra aquí la carpeta o los archivos</b>
+        <small>${detalle} · la carpeta entra también en sus subcarpetas · hasta 20 MB por archivo</small>
+        <span class="acciones" style="margin-top:6px">
+          <button type="button" class="btn chico oscuro" id="btn-carpeta-${suf}">${icono("capas")}Elegir carpeta</button>
+          <button type="button" class="btn chico" id="btn-archivos-${suf}">${icono("archivo")}Elegir archivos</button>
+        </span>
+        <input type="file" id="in-${suf}" multiple accept="${acepta}" class="sr-only">
+        <input type="file" id="in-${suf}-carpeta" webkitdirectory directory multiple class="sr-only">
+      </div>
+      <div id="carga-${suf}"></div>
+    </div>`;
+}
+
 export function vistaComprobantes(cont, ctx, { proveedor = false } = {}) {
   const ruc = ctx.perfil.ruc, gestiona = puedeGestionar(ctx.perfil.rol);
   const puedeSubir = proveedor || gestiona;
   cont.innerHTML = `
-    ${puedeSubir ? `<div class="panel">
-      <div class="panel-titulo"><div><h2>${proveedor ? "Enviar mis comprobantes" : "Subir comprobantes"}</h2>
-        <p>${proveedor
-          ? "Sube el <b>XML</b> de tus facturas o notas de crédito y, si quieres, su <b>PDF</b> con el mismo nombre (o un <b>ZIP</b> con todo). Se guardan solos y Contabilidad los ve al instante."
-          : "Sube los <b>XML</b> de SUNAT con su <b>PDF</b> (o un <b>ZIP</b>) o el <b>Excel de Gosocket</b> (Recibidos → Exportar). Se guarda solo y nunca se duplica."}</p></div></div>
-      <div class="zona-archivo" id="zona-comp">
-        ${icono("subir")}<b>Arrastra aquí la carpeta o los archivos</b>
-        <small>${proveedor ? "XML (+ PDF opcional) o ZIP" : "XML (+ PDF), ZIP o Excel (.xlsx) de Gosocket"} · la carpeta entra también en sus subcarpetas · hasta 20 MB por archivo${RUC_HOTEL ? ` · dirigidos al RUC ${esc(RUC_HOTEL)}` : ""}</small>
-        <span class="acciones" style="margin-top:6px">
-          <button type="button" class="btn chico oscuro" id="btn-carpeta-comp">${icono("capas")}Elegir carpeta</button>
-          <button type="button" class="btn chico" id="btn-archivos-comp">${icono("archivo")}Elegir archivos</button>
-        </span>
-        <input type="file" id="in-comp" multiple accept=".xml,.pdf,.zip${proveedor ? "" : ",.xlsx"}" class="sr-only">
-        <input type="file" id="in-comp-carpeta" webkitdirectory directory multiple class="sr-only">
-      </div>
-      <div id="carga-comp"></div>
-    </div>` : ""}
+    ${puedeSubir ? htmlCarga("comp", {
+      titulo: proveedor ? "Enviar mis comprobantes" : "Subir comprobantes",
+      texto: proveedor
+        ? "Sube el <b>XML</b> de tus facturas o notas de crédito y, si quieres, su <b>PDF</b> con el mismo nombre (o un <b>ZIP</b> con todo). Se guardan solos y Contabilidad los ve al instante."
+        : "Sube los <b>XML</b> de SUNAT con su <b>PDF</b> (o un <b>ZIP</b>) o el <b>Excel de Gosocket</b> (Recibidos → Exportar). Se guarda solo y nunca se duplica.",
+      detalle: `${proveedor ? "XML (+ PDF opcional) o ZIP" : "XML (+ PDF), ZIP o Excel (.xlsx) de Gosocket"}${RUC_HOTEL ? ` · dirigidos al RUC ${esc(RUC_HOTEL)}` : ""}`,
+      acepta: `.xml,.pdf,.zip${proveedor ? "" : ",.xlsx"}`,
+    }) : ""}
     <div class="panel">
       <div class="panel-titulo">
         <div><h2>${proveedor ? "Mis comprobantes" : "Comprobantes recibidos"}</h2><p id="desc-comp">Toca un comprobante para ver su detalle.</p></div>
@@ -322,26 +334,46 @@ function detalle(c, pago, { proveedor, gestiona, alBorrar }) {
 }
 
 /* ── Subir XML / ZIP / Excel de Gosocket ─────────────────────────── */
-function montarCarga(cont, ctx, { proveedor, alGuardar }) {
-  const zona = $("#zona-comp", cont), entrada = $("#in-comp", cont), caja = $("#carga-comp", cont);
+// Lo mismo sirve para los comprobantes (facturas recibidas) y para las retenciones que emite el hotel.
+const MODOS = {
+  comprobantes: {
+    suf: "comp", coleccion: "comprobantes", archivos: "comprobantes_archivos", leer: leerXmlSunat, xlsx: true,
+    nombre: "comprobante(s)", persona: "Emisor", total: "Total",
+    validar: (x, { proveedor, ruc }) => (proveedor && x.doc.ruc !== ruc ? `Es del RUC ${x.doc.ruc}: solo puedes enviar tus propios comprobantes.`
+      : RUC_HOTEL && x.doc.rucReceptor && x.doc.rucReceptor !== RUC_HOTEL ? `Está dirigido al RUC ${x.doc.rucReceptor}, no al hotel (${RUC_HOTEL}).` : ""),
+  },
+  retenciones: {
+    suf: "ret", coleccion: "retenciones", archivos: "retenciones_archivos", leer: leerRetencion, xlsx: false,
+    nombre: "retención(es)", persona: "Proveedor", total: "Retenido",
+    validar: (x) => (RUC_HOTEL && x.doc.rucAgente !== RUC_HOTEL ? `La emitió el RUC ${x.doc.rucAgente}, no el hotel (${RUC_HOTEL}).` : ""),
+  },
+};
+
+/**
+ * Sube XML (+ PDF del mismo nombre), ZIP, carpetas y, en comprobantes, el Excel de Gosocket. Se guarda solo.
+ * `despues(docsGuardados)` (opcional) corre tras guardar y devuelve un texto para el resumen.
+ */
+export function montarCarga(cont, ctx, { proveedor = false, alGuardar, modo = "comprobantes", despues } = {}) {
+  const conf = MODOS[modo], suf = conf.suf;
+  const zona = $(`#zona-${suf}`, cont), entrada = $(`#in-${suf}`, cont), caja = $(`#carga-${suf}`, cont);
   const uid = ctx.user.uid, ruc = ctx.perfil.ruc;
-  const carpeta = $("#in-comp-carpeta", cont);
-  $("#btn-carpeta-comp", cont).addEventListener("click", () => carpeta.click());
-  $("#btn-archivos-comp", cont).addEventListener("click", () => entrada.click());
+  const carpeta = $(`#in-${suf}-carpeta`, cont);
+  $(`#btn-carpeta-${suf}`, cont).addEventListener("click", () => carpeta.click());
+  $(`#btn-archivos-${suf}`, cont).addEventListener("click", () => entrada.click());
   for (const inp of [entrada, carpeta]) inp.addEventListener("change", () => { procesar([...inp.files]); inp.value = ""; });
   zona.addEventListener("dragover", (e) => { e.preventDefault(); zona.classList.add("sobre"); });
   zona.addEventListener("dragleave", () => zona.classList.remove("sobre"));
   zona.addEventListener("drop", async (e) => { e.preventDefault(); zona.classList.remove("sobre"); procesar(await archivosSoltados(e.dataTransfer)); });
 
   let items = [], trabajando = false, resumen = "", ocultar = 0;
-  const pag = paginador("carga-comprobantes", pintar, { etiqueta: "archivos" });
+  const pag = paginador(`carga-${modo}`, pintar, { etiqueta: "archivos" });
 
   async function leerArchivos(archivos) {
     const salida = [], pdfs = [];
     // Nombre sin carpeta ni extensión: así el PDF se empareja con el XML del mismo nombre.
     const base = (n) => n.split(/[\\/]/).pop().replace(/\.[^.]+$/, "").toLowerCase();
     const xml = async (nombre, bytes, grupo) => {
-      const texto = textoXml(bytes), r = leerXmlSunat(texto);
+      const texto = textoXml(bytes), r = conf.leer(texto);
       if (!r.ok) return salida.push({ nombre, estado: r.omitir ? "omitido" : "rechazado", motivo: r.motivo });
       salida.push({ nombre, id: r.id, doc: r.doc, hash: await huellaArchivo(new Blob([bytes])), origen: proveedor ? "proveedor" : "hotel",
         estado: "nuevo", xmlTexto: texto, base: base(nombre), grupo });
@@ -358,13 +390,13 @@ function montarCarga(cont, ctx, { proveedor, alGuardar }) {
             else if (/\.pdf$/i.test(e.nombre)) pdfs.push({ nombre, base: base(e.nombre), datos: e.datos, grupo: f.name });
           }
           if (!entradas.some((e) => /\.xml$/i.test(e.nombre))) salida.push({ nombre: f.name, estado: "rechazado", motivo: "El ZIP no tiene archivos XML." });
-        } else if (/\.xlsx$/i.test(f.name) && !proveedor) {
+        } else if (/\.xlsx$/i.test(f.name) && conf.xlsx && !proveedor) {
           const filasG = filasGosocket(await leerXlsx(f));
           if (!filasG) salida.push({ nombre: f.name, estado: "rechazado", motivo: "El Excel no tiene las columnas de Gosocket (Id Gosocket, Id Emisor, Correlativo…)." });
           else filasG.forEach((r) => salida.push(r.ok ? { nombre: r.nombre, id: r.id, doc: r.doc, hash: "", origen: "gosocket", estado: "nuevo" }
             : { nombre: r.nombre, estado: r.omitir ? "omitido" : "rechazado", motivo: r.motivo }));
         } else if (/\.pdf$/i.test(f.name)) pdfs.push({ nombre: f.name, base: base(f.name), datos: new Uint8Array(await f.arrayBuffer()), grupo: "" });
-        else salida.push({ nombre: f.name, estado: "omitido", motivo: `Tipo de archivo no admitido (${proveedor ? "XML, PDF o ZIP" : "XML, PDF, ZIP o Excel de Gosocket"}).` });
+        else salida.push({ nombre: f.name, estado: "omitido", motivo: `Tipo de archivo no admitido (${!conf.xlsx || proveedor ? "XML, PDF o ZIP" : "XML, PDF, ZIP o Excel de Gosocket"}).` });
       } catch (err) {
         salida.push({ nombre: f.name, estado: "rechazado", motivo: err.message || "No se pudo leer el archivo." });
       }
@@ -399,8 +431,8 @@ function montarCarga(cont, ctx, { proveedor, alGuardar }) {
       // Reglas antes de guardar: RUC propio (proveedor), dirigido al hotel, fecha, repetidos en la selección.
       const vistos = new Set();
       for (const x of items.filter((y) => y.estado === "nuevo")) {
-        if (proveedor && x.doc.ruc !== ruc) Object.assign(x, { estado: "rechazado", motivo: `Es del RUC ${x.doc.ruc}: solo puedes enviar tus propios comprobantes.` });
-        else if (RUC_HOTEL && x.doc.rucReceptor && x.doc.rucReceptor !== RUC_HOTEL) Object.assign(x, { estado: "rechazado", motivo: `Está dirigido al RUC ${x.doc.rucReceptor}, no al hotel (${RUC_HOTEL}).` });
+        const motivo = conf.validar(x, { proveedor, ruc });
+        if (motivo) Object.assign(x, { estado: "rechazado", motivo });
         else if (!/^\d{4}-\d{2}-\d{2}$/.test(x.doc.fechaEmision)) Object.assign(x, { estado: "rechazado", motivo: "Sin fecha de emisión." });
         else if (vistos.has(x.id)) x.estado = "repetido";
         else vistos.add(x.id);
@@ -416,7 +448,7 @@ function montarCarga(cont, ctx, { proveedor, alGuardar }) {
   async function compararConLoGuardado(lista) {
     for (let i = 0; i < lista.length; i += 25) {
       const tanda = lista.slice(i, i + 25);
-      const snaps = await Promise.all(tanda.map((x) => getDoc(doc(db, "comprobantes", x.id))));
+      const snaps = await Promise.all(tanda.map((x) => getDoc(doc(db, conf.coleccion, x.id))));
       tanda.forEach((x, j) => {
         if (!snaps[j].exists()) return;
         const ya = snaps[j].data();
@@ -431,7 +463,7 @@ function montarCarga(cont, ctx, { proveedor, alGuardar }) {
         if (ya.hash && ya.hash === x.hash && (ya.tieneXml || !x.xmlTexto) && (ya.tienePdf || !x.pdf)) { x.estado = "igual"; return; }
         if (proveedor && ya.origen !== "proveedor") { Object.assign(x, { estado: "igual", motivo: "Ya lo registró el hotel." }); return; }
         // El XML reemplaza los datos, pero conserva lo que vino de Gosocket (estado SUNAT y enlace).
-        Object.assign(x.doc, { estadoSunat: ya.estadoSunat || "", motivoRechazo: ya.motivoRechazo || "", gosocketId: ya.gosocketId || "", ...(ya.fechaRecepcion ? { fechaRecepcion: ya.fechaRecepcion } : {}) });
+        if (modo === "comprobantes") Object.assign(x.doc, { estadoSunat: ya.estadoSunat || "", motivoRechazo: ya.motivoRechazo || "", gosocketId: ya.gosocketId || "", ...(ya.fechaRecepcion ? { fechaRecepcion: ya.fechaRecepcion } : {}) });
         x.estado = "cambio";
       });
     }
@@ -444,11 +476,11 @@ function montarCarga(cont, ctx, { proveedor, alGuardar }) {
       const tanda = porGuardar.slice(i, i + 200), lote = writeBatch(db);
       tanda.forEach((x) => {
         x.estado = "guardando";
-        const ref = doc(db, "comprobantes", x.id);
+        const ref = doc(db, conf.coleccion, x.id);
         if (x.parche) { lote.update(ref, x.parche); return; }
         lote.set(ref, { ...x.doc, origen: x.origen, archivo: x.nombre.slice(0, 200), hash: x.hash,
           tieneXml: !!x.xmlTexto, tienePdf: !!(x.xmlTexto && x.pdf), subidoPorUid: uid, subidoEn: serverTimestamp() });
-        if (x.xmlTexto) lote.set(refArchivos(x.id), { xml: x.xmlTexto, ...(x.pdf ? { pdf: x.pdf } : {}), subidoPorUid: uid, subidoEn: serverTimestamp() });
+        if (x.xmlTexto) lote.set(doc(db, conf.archivos, x.id), { xml: x.xmlTexto, ...(x.pdf ? { pdf: x.pdf } : {}), subidoPorUid: uid, subidoEn: serverTimestamp() });
       });
       pintar();
       try {
@@ -456,20 +488,25 @@ function montarCarga(cont, ctx, { proveedor, alGuardar }) {
         tanda.forEach((x) => { x.estado = "guardado"; });
         hechos += tanda.length;
       } catch (err) {
-        console.error("Portal: no se pudieron guardar los comprobantes", err);
+        console.error(`Portal: no se pudieron guardar (${modo})`, err);
         tanda.forEach((x) => Object.assign(x, { estado: "error", motivo: err.code === "permission-denied" ? "Sin permiso para guardarlo." : err.message }));
         break;
       }
     }
     // Terminado: la lista desaparece; solo quedan a la vista los que tienen algún problema.
     const ya = items.filter((x) => ["igual", "repetido"].includes(x.estado)).length, otros = items.filter((x) => x.estado === "omitido").length;
-    resumen = `${hechos ? `✓ ${hechos} comprobante(s) guardado(s)` : "Nada nuevo que guardar"}${ya ? ` · ${ya} ya estaban (se omiten)` : ""}${otros ? ` · ${otros} que no son comprobantes de pago (guías, CDR u otros archivos) se omiten` : ""}`;
+    let extra = "";
+    if (hechos && despues) {
+      try { extra = await despues(items.filter((x) => x.estado === "guardado" && x.doc).map((x) => x.doc)); }
+      catch (err) { console.error("Portal: no se pudo completar después de guardar", err); }
+    }
+    resumen = `${hechos ? `✓ ${hechos} ${conf.nombre} guardado(s)` : "Nada nuevo que guardar"}${ya ? ` · ${ya} ya estaban (se omiten)` : ""}${otros ? ` · ${otros} que no corresponden (guías, CDR u otros archivos) se omiten` : ""}${extra ? ` · ${extra}` : ""}`;
     items = items.filter((x) => ["rechazado", "error"].includes(x.estado) || (x.motivo && x.estado === "guardado"));
     pag.reiniciar();
     pintar();
     clearTimeout(ocultar);
     if (!items.length) ocultar = setTimeout(() => { resumen = ""; pintar(); }, 6000);
-    if (hechos) { notificar(`${hechos} comprobante(s) guardado(s)`); alGuardar(); }
+    if (hechos) { notificar(`${hechos} ${conf.nombre} guardado(s)`); alGuardar(); }
   }
 
   function pintar() {
@@ -481,7 +518,7 @@ function montarCarga(cont, ctx, { proveedor, alGuardar }) {
         : `<p class="ayuda" style="margin:12px 0 8px"><b>${cuenta("guardado")}</b> guardados · <b>${cuenta("igual", "repetido")}</b> ya estaban (se omiten)
         · <b>${cuenta("rechazado", "error")}</b> rechazados${cuenta("omitido") ? ` · <b>${cuenta("omitido")}</b> se omiten` : ""}${cuenta("nuevo", "cambio", "estado", "guardando") ? ` · <b>${cuenta("nuevo", "cambio", "estado", "guardando")}</b> en proceso` : ""}</p>`}
       <div class="tabla-caja"><table>
-        <thead><tr><th>Archivo</th><th>Comprobante</th>${proveedor ? "" : "<th>Emisor</th>"}<th class="num">Total</th><th>Estado</th><th>Detalle</th></tr></thead>
+        <thead><tr><th>Archivo</th><th>Comprobante</th>${proveedor ? "" : `<th>${conf.persona}</th>`}<th class="num">${conf.total}</th><th>Estado</th><th>Detalle</th></tr></thead>
         <tbody>${visibles.map((x) => {
           const [clase, texto] = ESTADOS_CARGA[x.estado] || ["neutro", x.estado];
           return `<tr><td style="font-size:11px">${esc(x.nombre)}</td><td class="mono">${x.doc ? esc(`${x.doc.serie}-${x.doc.numero}`) : "—"}</td>
@@ -490,8 +527,8 @@ function montarCarga(cont, ctx, { proveedor, alGuardar }) {
             <td style="font-size:11px">${esc(x.motivo || "")}</td></tr>`;
         }).join("")}</tbody>
       </table></div>
-      <div id="pag-carga-comp"></div>`;
-    const barra = $("#pag-carga-comp", caja);
+      <div id="pag-carga-${suf}"></div>`;
+    const barra = $(`#pag-carga-${suf}`, caja);
     barra.innerHTML = html;
     pag.enganchar(barra);
   }

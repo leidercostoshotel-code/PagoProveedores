@@ -49,7 +49,9 @@ const numeroComprobante = (f) => { const m = String(f).match(/(\d+)\D*$/); retur
 /** Formas de buscar una factura: tal cual y como la guarda el TXT ("F001-46937" → "F00046937"). */
 export function formasFactura(texto) {
   const F = String(texto).toUpperCase().replace(/\s/g, ""), m = F.match(/^([FBE])[A-Z0-9]*-(\d+)$/);
-  return [...new Set([F, ...(m ? [`${m[1]}${m[2].padStart(8, "0")}`] : [])])];
+  // El TXT pone la letra del tipo de documento: una factura de serie E001 también sale como "F…".
+  const formas = m ? [`${m[1]}${m[2].padStart(8, "0")}`, ...(m[1] === "E" ? [`F${m[2].padStart(8, "0")}`] : [])] : [];
+  return [...new Set([F, ...formas])];
 }
 
 /** ID del documento en "pagos": RUC + comprobante + fecha de abono (así nunca se duplica). */

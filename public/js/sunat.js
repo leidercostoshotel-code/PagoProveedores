@@ -15,6 +15,15 @@ export const TIPOS = {
 };
 const r2 = (n) => Math.round((Number(n) || 0) * 100) / 100;
 
+/**
+ * Cómo escribe el TXT de Telecrédito el comprobante pagado: letra del TIPO de documento (F = factura,
+ * B = boleta; no la de la serie) + número a 8 dígitos: "F001-46937" y "E001-46937" → "F00046937".
+ */
+export function facturaPagoDe(tipo, serie, numero) {
+  const letra = { "01": "F", "03": "B" }[tipo] || String(serie || "")[0] || "";
+  return `${letra}${String(Number(numero) || 0).padStart(8, "0")}`;
+}
+
 /** Identificador del comprobante y la forma en que el TXT del banco escribe el mismo número. */
 export function claves(ruc, tipo, serie, numero) {
   const s = String(serie).toUpperCase().trim(), n = Number(String(numero).replace(/\D/g, "")) || 0;
@@ -22,8 +31,7 @@ export function claves(ruc, tipo, serie, numero) {
     serie: s, numero: n,
     comprobante: `${s}-${n}`,
     id: `${ruc}_${tipo}_${s}-${n}`,
-    // TXT de Telecrédito: letra de la serie + número a 8 dígitos ("F001-46937" → "F00046937").
-    facturaPago: `${s[0] || ""}${String(n).padStart(8, "0")}`,
+    facturaPago: facturaPagoDe(tipo, s, n),
   };
 }
 
@@ -59,6 +67,7 @@ export function leerXmlSunat(textoXml) {
   if (x.getElementsByTagName("parsererror").length) return { ok: false, motivo: "El XML está dañado o incompleto." };
   const raiz = x.documentElement, tipoRaiz = raiz.localName;
   if (tipoRaiz === "ApplicationResponse") return { ok: false, omitir: true, motivo: "Constancia (CDR) de SUNAT: no es el comprobante." };
+  if (tipoRaiz === "Retention") return { ok: false, motivo: "Es un comprobante de retención: lo sube Contabilidad en la pestaña Retenciones." };
   if (tipoRaiz === "DespatchAdvice") return { ok: false, omitir: true, motivo: "Guía de remisión: no es un comprobante de pago." };
   if (!["Invoice", "CreditNote", "DebitNote"].includes(tipoRaiz)) return { ok: false, motivo: "No es un comprobante electrónico SUNAT (UBL 2.1)." };
 
@@ -111,6 +120,47 @@ export function leerXmlSunat(textoXml) {
       items,
     },
     id: k.id,
+  };
+}
+
+/* ── Comprobante de retención (tipo 20, lo emite el hotel como agente de retención) ── */
+/**
+ * Lee el XML de un comprobante de retención SUNAT (Retention-1). Devuelve { ok, id, doc } o { ok: false, motivo }.
+ * doc.ruc es el del PROVEEDOR (a quien se le retuvo), así el proveedor ve los suyos; rucAgente es el del hotel.
+ */
+export function leerRetencion(textoXml) {
+  const x = new DOMParser().parseFromString(textoXml, "application/xml");
+  if (x.getElementsByTagName("parsererror").length) return { ok: false, motivo: "El XML está dañado o incompleto." };
+  const raiz = x.documentElement;
+  if (raiz.localName === "ApplicationResponse") return { ok: false, omitir: true, motivo: "Constancia (CDR) de SUNAT: no es el comprobante." };
+  if (raiz.localName !== "Retention") return { ok: false, motivo: "No es un comprobante de retención (debe ser el XML de SUNAT tipo 20)." };
+  const num = leerNumero(texto(hijo(raiz, "ID")));
+  if (!num) return { ok: false, motivo: `Número de retención no válido ("${texto(hijo(raiz, "ID"))}").` };
+  const agente = hijo(raiz, "AgentParty"), receptor = hijo(raiz, "ReceiverParty");
+  const ruc = texto(ruta(receptor, "PartyIdentification", "ID"));
+  if (!/^\d{11}$/.test(ruc)) return { ok: false, motivo: "El XML no trae el RUC del proveedor." };
+  const totalRet = hijo(raiz, "TotalInvoiceAmount");
+  const documentos = hijos(raiz, "SUNATRetentionDocumentReference").slice(0, 300).map((d) => {
+    const id = hijo(d, "ID"), n = leerNumero(texto(id)), tipo = (id?.getAttribute("schemeID") || "01").padStart(2, "0");
+    const pago = hijo(d, "Payment"), info = hijo(d, "SUNATRetentionInformation");
+    return {
+      tipo, comprobante: n ? `${n.serie}-${n.numero}` : texto(id), facturaPago: n ? facturaPagoDe(tipo, n.serie, n.numero) : "",
+      fechaEmision: texto(hijo(d, "IssueDate")), total: numero(hijo(d, "TotalInvoiceAmount")),
+      fechaPago: texto(hijo(pago, "PaidDate")), pagado: numero(hijo(pago, "PaidAmount")),
+      retenido: numero(hijo(info, "SUNATRetentionAmount")), neto: numero(hijo(info, "SUNATNetTotalPaid")),
+    };
+  });
+  const k = claves(ruc, "20", num.serie, num.numero);
+  return {
+    ok: true, id: k.id,
+    doc: {
+      ruc, razonSocial: texto(ruta(receptor, "PartyLegalEntity", "RegistrationName")) || texto(ruta(receptor, "PartyName", "Name")),
+      rucAgente: texto(ruta(agente, "PartyIdentification", "ID")),
+      serie: k.serie, numero: k.numero, comprobante: k.comprobante, fechaEmision: texto(hijo(raiz, "IssueDate")),
+      porcentaje: numero(hijo(raiz, "SUNATRetentionPercent")), moneda: totalRet?.getAttribute("currencyID") || "PEN",
+      total: numero(totalRet), totalPagado: numero(hijo(raiz, "SUNATTotalPaid")),
+      documentos, fechasPago: [...new Set(documentos.map((d) => d.fechaPago).filter(Boolean))],
+    },
   };
 }
 

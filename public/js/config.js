@@ -26,7 +26,8 @@ export const REGION_FUNCIONES = "us-central1";
 export const DOMINIO_PROVEEDORES = "proveedores.hotel";
 
 // RUC del hotel (receptor de las facturas de los proveedores): un XML dirigido a otro RUC se rechaza.
-export const RUC_HOTEL = "20297885538";            // HOTELERA COSTA DEL PACIFICO S.A.
+export const RUC_HOTEL = "20297885538";
+export const RAZON_SOCIAL_HOTEL = "HOTELERA COSTA DEL PACIFICO S.A.";
 
 export const EMPRESA = "Swissôtel Lima";
 export const NOMBRE_SISTEMA = "Portal de Proveedores";

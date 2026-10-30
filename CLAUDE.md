@@ -43,12 +43,22 @@ del hotel administra todo desde el mismo portal. Login y estilo copiados de la s
   Cada fila tiene **PDF** y **XML**: el XML original y el PDF van en `comprobantes_archivos/{id}` (nunca se
   listan; ≤ ~950 KB entre los dos, si no el PDF no se guarda); sin PDF → representación impresa (modal para
   imprimir/guardar PDF); de Gosocket sin XML → enlaces de Gosocket (solo el hotel).
+- `public/js/retenciones.js` — pestaña **Retenciones** (hotel y proveedor): comprobantes de retención SUNAT tipo 20
+  (R001-…) que emite el hotel (agente, 3 %). Contabilidad/admin sube XML (+ PDF), ZIP o carpeta con el mismo
+  `montarCarga` de comprobantes (`modo: "retenciones"`); se rechaza si el agente no es `RUC_HOTEL`. Cada proveedor
+  ve y baja (PDF/XML; sin PDF, representación impresa) las suyas. **Cruce con pagos:** al guardar una retención,
+  `completarPagosConRetenciones` pone `bruto` y `retencion` a cada pago del TXT que cuadra (RUC + factura + fecha
+  de abono + neto); al cargar un TXT después, `aplicarRetencionesAPagos` (en `guardarLote`) usa las retenciones de
+  esa fecha (`fechasPago` array-contains). Excel: una fila por factura retenida.
+- **Letra del TXT = tipo de documento, no serie:** `facturaPagoDe(tipo, serie, número)` (sunat.js): factura → "F",
+  boleta → "B" + número a 8 dígitos ("E001-523" → "F00000523"). Los comprobantes calculan la clave al mostrar
+  (`clavePago`), no usan la guardada. `formasFactura` (bcp.js) busca "E001-…" también como "F…".
 - `public/js/sunat.js` — lector UBL 2.1 (Invoice 01/03, CreditNote 07, DebitNote 08; por nombre local, sin
   depender de prefijos), lector del Excel de Gosocket y la fila de descarga. `public/js/zip.js` — leer ZIP/XLSX
   (DecompressionStream) y escribir XLSX sin librerías (la CSP solo deja scripts propios y de gstatic).
 - `functions/index.js` — `verificarBloqueoLogin`, `registrarIntentoFallido`, `limpiarIntentosLogin`, `restablecerClave` (plan Blaze, opcionales).
 - `firestore.rules` — roles con perfil en `usuarios/{uid}`; proveedor solo lee `pagos` con su `ruc`.
-- `pruebas/reglas.mjs` — 85 pruebas de seguridad de las reglas (lo que intentaría alguien con F12 en cada rol);
+- `pruebas/reglas.mjs` — 100 pruebas de seguridad de las reglas (lo que intentaría alguien con F12 en cada rol);
   `npm install && npm run probar:reglas` (emulador, necesita Java). **Correrlas tras tocar `firestore.rules`.**
 - `firebase.json` — cabeceras de seguridad (CSP: scripts solo propios y de gstatic, datos solo a Google;
   sin iframes ajenos; HSTS). Un script o servicio externo nuevo hay que sumarlo a la CSP.
@@ -77,6 +87,11 @@ del hotel administra todo desde el mismo portal. Login y estilo copiados de la s
   (get por prefijo de RUC), nadie lista; lo escribe quien puede escribir su comprobante (getAfter en el lote). Reglas: el
   proveedor lee por ID solo si empieza con su RUC (así sabe si ya existe), crea con origen "proveedor" y solo
   cambia los que él subió; Contabilidad/admin todo; consulta solo lee (`hasOnly` de campos y el ID debe cuadrar).
+- `retenciones/{RUC_PROVEEDOR_20_SERIE-NÚMERO}`: ruc (proveedor), razonSocial, rucAgente, serie, numero, comprobante,
+  fechaEmision, porcentaje, moneda, total (retenido), totalPagado, documentos [{tipo, comprobante, facturaPago,
+  fechaEmision, total, fechaPago, pagado, retenido, neto}], fechasPago, origen, archivo, hash, tieneXml, tienePdf,
+  subidoPorUid, subidoEn. `retenciones_archivos/{id}`: xml, pdf. Solo Contabilidad/admin escribe; el proveedor lee las
+  suyas (get por prefijo de RUC, list con `ruc ==`).
 - **Montos con su moneda:** `monto(n, moneda)` (util.js) pone "S/" o "USD"; los totales usan `monedaComun()`
   de las filas de la página (si hay soles y dólares juntos, van sin símbolo y con un aviso).
 
@@ -104,6 +119,8 @@ admin se crea a mano en la consola (ver README).
 
 ## Pendientes conocidos
 - Posible soporte futuro para TXT de Interbank y BBVA.
+- Importar las retenciones solas desde un correo (como BEOs en A-B-Swiss: IMAP desde una Cloud Function
+  programada): necesita plan Blaze y la cuenta de correo como secreto.
 
 ## Flujo de trabajo (pedido del dueño)
 - **Claude crea el PR y lo fusiona él mismo en GitHub** al terminar cada cambio (no esperar a que el dueño haga clic).

@@ -108,6 +108,33 @@ service cloud.firestore {
       allow delete: if gestiona();
     }
 
+    // Comprobantes de retención (ID = RUC_DEL_PROVEEDOR_20_SERIE-NÚMERO): los emite el hotel; los sube
+    // Contabilidad/admin y cada proveedor lee solo los suyos.
+    function retencionOk(id) {
+      let d = request.resource.data;
+      return d.keys().hasOnly(['ruc', 'razonSocial', 'rucAgente', 'serie', 'numero', 'comprobante', 'fechaEmision',
+          'porcentaje', 'moneda', 'total', 'totalPagado', 'documentos', 'fechasPago', 'origen', 'archivo', 'hash',
+          'tieneXml', 'tienePdf', 'subidoPorUid', 'subidoEn'])
+        && d.ruc is string && d.ruc.matches('[0-9]{11}') && d.serie is string && d.numero is int
+        && id == d.ruc + '_20_' + d.serie + '-' + string(d.numero)
+        && d.fechaEmision is string && d.total is number
+        && d.documentos is list && d.documentos.size() <= 300 && d.fechasPago is list;
+    }
+    match /retenciones/{id} {
+      allow get: if esInterno() || esProveedorDe(id.split('_')[0]);
+      allow list: if esInterno() || esProveedorDe(resource.data.ruc);
+      allow create, update: if gestiona() && retencionOk(id) && subidoAhora();
+      allow delete: if gestiona();
+    }
+    match /retenciones_archivos/{id} {
+      allow get: if esInterno() || esProveedorDe(id.split('_')[0]);
+      allow list: if false;
+      allow create, update: if gestiona()
+        && request.resource.data.keys().hasOnly(['xml', 'pdf', 'subidoPorUid', 'subidoEn'])
+        && request.resource.data.xml is string && subidoAhora();
+      allow delete: if gestiona();
+    }
+
     // Bloqueo por intentos fallidos: solo lo tocan las Cloud Functions (Admin SDK).
     match /intentos_login/{email} {
       allow read, write: if false;
