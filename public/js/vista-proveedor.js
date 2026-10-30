@@ -15,6 +15,7 @@ import {
 import { paginaServidor, agregar } from "./paginaServidor.js";
 import { formasFactura } from "./bcp.js";
 import { vistaComprobantes } from "./comprobantes.js";
+import { vistaRetenciones } from "./retenciones.js";
 import { CORREO_CONTABILIDAD, EMPRESA } from "./config.js";
 
 export function pestanas() {
@@ -22,6 +23,7 @@ export function pestanas() {
     { id: "pagos", texto: "Mis pagos", icono: "recibo" },
     { id: "resumen", texto: "Resumen por mes", icono: "grafico" },
     { id: "comprobantes", texto: "Mis comprobantes", icono: "archivo" },
+    { id: "retenciones", texto: "Retenciones", icono: "recibo" },
   ];
 }
 
@@ -46,6 +48,7 @@ function aniosEntre(primero, ultimo) {
 
 export function montar(id, cont, ctx) {
   if (id === "comprobantes") return vistaComprobantes(cont, ctx, { proveedor: true });
+  if (id === "retenciones") return vistaRetenciones(cont, ctx, { proveedor: true });
   cont.innerHTML = `<div class="panel"><p class="ayuda" style="margin:0">Cargando tus pagos…</p></div>`;
   let vivo = true, limpiar = null;
   extremos(ctx.perfil.ruc)

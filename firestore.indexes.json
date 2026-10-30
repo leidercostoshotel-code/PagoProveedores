@@ -921,6 +921,98 @@
           "order": "ASCENDING"
         }
       ]
+    },
+    {
+      "collectionGroup": "retenciones",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "ruc",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "fechaEmision",
+          "order": "DESCENDING"
+        }
+      ]
+    },
+    {
+      "collectionGroup": "retenciones",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "comprobante",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "fechaEmision",
+          "order": "DESCENDING"
+        }
+      ]
+    },
+    {
+      "collectionGroup": "retenciones",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "ruc",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "comprobante",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "fechaEmision",
+          "order": "DESCENDING"
+        }
+      ]
+    },
+    {
+      "collectionGroup": "retenciones",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "ruc",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "fechaEmision",
+          "order": "ASCENDING"
+        }
+      ]
+    },
+    {
+      "collectionGroup": "retenciones",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "comprobante",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "fechaEmision",
+          "order": "ASCENDING"
+        }
+      ]
+    },
+    {
+      "collectionGroup": "retenciones",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "ruc",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "comprobante",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "fechaEmision",
+          "order": "ASCENDING"
+        }
+      ]
     }
   ],
   "fieldOverrides": []

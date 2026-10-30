@@ -1,6 +1,6 @@
 /* ══════════════════════════════════════════════════════════════════
    ADMINISTRACIÓN (personal del hotel: admin / contabilidad / consulta)
-   Pestañas: Pagos · Comprobantes · Cargar lote · Lotes · Proveedores · Usuarios.
+   Pestañas: Pagos · Comprobantes · Retenciones · Cargar lote · Lotes · Proveedores · Usuarios.
    Lo que cada rol puede hacer lo decide de verdad firestore.rules; aquí
    solo se esconden los botones que no le corresponden.
    ══════════════════════════════════════════════════════════════════ */
@@ -19,12 +19,14 @@ import { leerArchivo, interpretarLote, leerDescuentos, huellaArchivo, formasFact
 import { constancia } from "./vista-proveedor.js";
 import { paginaServidor } from "./paginaServidor.js";
 import { vistaComprobantes } from "./comprobantes.js";
+import { vistaRetenciones, aplicarRetencionesAPagos } from "./retenciones.js";
 import { DOMINIO_PROVEEDORES } from "./config.js";
 
 export function pestanas(rol) {
   return [
     { id: "pagos", texto: "Pagos", icono: "recibo" },
     { id: "comprobantes", texto: "Comprobantes", icono: "archivo" },
+    { id: "retenciones", texto: "Retenciones", icono: "recibo" },
     ...(puedeGestionar(rol) ? [{ id: "cargar", texto: "Cargar lotes", icono: "subir" }] : []),
     { id: "lotes", texto: "Lotes", icono: "capas" },
     { id: "proveedores", texto: "Proveedores", icono: "edificio" },
@@ -33,7 +35,7 @@ export function pestanas(rol) {
 }
 
 export function montar(id, cont, ctx) {
-  const vistas = { pagos: vistaPagos, comprobantes: vistaComprobantes, cargar: vistaCargar, lotes: vistaLotes, proveedores: vistaProveedores, usuarios: vistaUsuarios };
+  const vistas = { pagos: vistaPagos, comprobantes: vistaComprobantes, retenciones: vistaRetenciones, cargar: vistaCargar, lotes: vistaLotes, proveedores: vistaProveedores, usuarios: vistaUsuarios };
   return vistas[id](cont, ctx);
 }
 
@@ -477,6 +479,8 @@ function vistaCargar(cont, ctx) {
 /** Guarda un lote: pagos en tandas de 450 (id = RUC_FACTURA_FECHA, así nunca se duplican) y su registro con la huella. */
 async function guardarLote(x, ctx) {
   const { r, file, huella } = x;
+  // Con las retenciones ya guardadas de esa fecha, cada pago lleva su bruto y su retención.
+  await aplicarRetencionesAPagos(r.pagos, r.fechaPago).catch((err) => console.error("Portal: no se pudieron leer las retenciones", err));
   for (let i = 0; i < r.pagos.length; i += 450) {
     const batch = writeBatch(db);
     for (const { id, ...datos } of r.pagos.slice(i, i + 450)) {

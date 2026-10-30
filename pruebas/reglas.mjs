@@ -30,6 +30,10 @@ await env.withSecurityRulesDisabled(async (c) => {
   await setDoc(doc(db, "comprobantes", "20111111111_01_F001-1"), { ruc: "20111111111", origen: "hotel", total: 10 });
   await setDoc(doc(db, "comprobantes", "20111111111_01_F001-2"), { ruc: "20111111111", origen: "proveedor", total: 20 });
   await setDoc(doc(db, "comprobantes", "20222222222_01_F001-1"), { ruc: "20222222222", origen: "proveedor", total: 30 });
+  await setDoc(doc(db, "retenciones", "20111111111_20_R001-1"), { ruc: "20111111111", total: 1 });
+  await setDoc(doc(db, "retenciones", "20222222222_20_R001-2"), { ruc: "20222222222", total: 2 });
+  await setDoc(doc(db, "retenciones_archivos", "20111111111_20_R001-1"), { xml: "<Retention/>" });
+  await setDoc(doc(db, "retenciones_archivos", "20222222222_20_R001-2"), { xml: "<Retention/>" });
 });
 // Comprobante válido (como lo arma public/js/comprobantes.js).
 const comp = (uid, ruc, numero, origen, extra = {}) => ({
@@ -122,6 +126,20 @@ await caso("NO pone archivos sin comprobante", false, () => setDoc(archRef(db, "
 await caso("NO pone archivos a un comprobante de B", false, () => setDoc(archRef(db, "20222222222", 1), arch("PA")));
 await caso("NO agrega campos extra a los archivos", false, () => setDoc(archRef(db, "20111111111", 20), arch("PA", { otro: 1 })));
 
+console.log("Proveedor A · retenciones (F12)");
+const ret = (uid, ruc, numero, extra = {}) => ({ ruc, razonSocial: "X", rucAgente: "20297885538", serie: "R001", numero, comprobante: `R001-${numero}`,
+  fechaEmision: "2026-10-15", porcentaje: 3, moneda: "PEN", total: 21.94, totalPagado: 709.31, documentos: [], fechasPago: ["2026-10-15"],
+  origen: "hotel", archivo: "r.xml", hash: "h", tieneXml: true, tienePdf: false, subidoPorUid: uid, subidoEn: serverTimestamp(), ...extra });
+const retRef = (db, ruc, numero) => doc(db, "retenciones", `${ruc}_20_R001-${numero}`);
+await caso("lee SUS retenciones", true, () => getDocs(query(collection(db, "retenciones"), where("ruc", "==", "20111111111"))));
+await caso("lee la suya por ID", true, () => getDoc(retRef(db, "20111111111", 1)));
+await caso("baja el XML de la suya", true, () => getDoc(doc(db, "retenciones_archivos", "20111111111_20_R001-1")));
+await caso("NO lee las de B", false, () => getDocs(query(collection(db, "retenciones"), where("ruc", "==", "20222222222"))));
+await caso("NO lee la de B por ID", false, () => getDoc(retRef(db, "20222222222", 2)));
+await caso("NO baja el XML de B", false, () => getDoc(doc(db, "retenciones_archivos", "20222222222_20_R001-2")));
+await caso("NO lista todas", false, () => getDocs(collection(db, "retenciones")));
+await caso("NO sube retenciones (las emite el hotel)", false, () => setDoc(retRef(db, "20111111111", 50), ret("PA", "20111111111", 50)));
+
 console.log("Proveedor desactivado");
 db = as("PX");
 await caso("NO lee ni sus propios pagos", false, () => pagosDe(db, "20333333333"));
@@ -136,6 +154,8 @@ await caso("NO escribe pagos", false, () => setDoc(doc(db, "pagos", "Z"), { ruc:
 await caso("NO crea proveedores", false, () => setDoc(doc(db, "usuarios", "N1"), { rol: "proveedor", activo: true, ruc: "20444444444" }));
 await caso("NO se sube a admin", false, () => updateDoc(doc(db, "usuarios", "CSU"), { rol: "admin" }));
 await caso("lee todos los comprobantes", true, () => getDocs(collection(db, "comprobantes")));
+await caso("lee todas las retenciones", true, () => getDocs(collection(db, "retenciones")));
+await caso("NO sube retenciones", false, () => setDoc(retRef(db, "20111111111", 51), ret("CSU", "20111111111", 51)));
 await caso("NO sube comprobantes", false, () => setDoc(compRef(db, "20111111111", 50), comp("CSU", "20111111111", 50, "hotel")));
 
 console.log("Contabilidad");
@@ -154,6 +174,12 @@ await caso("NO lo marca como subido por el proveedor", false, () => setDoc(compR
 await caso("guarda el XML de un comprobante que sube", true, () => setDoc(doc(db, "comprobantes_archivos", "20222222222_01_F001-60"), { xml: "<Invoice/>", subidoPorUid: "CON", subidoEn: serverTimestamp() }));
 await caso("baja cualquier XML", true, () => getDoc(doc(db, "comprobantes_archivos", "20111111111_01_F001-20")));
 await caso("borra un comprobante", true, () => deleteDoc(compRef(db, "20222222222", 61)));
+await caso("sube una retención con su XML", true, () => { const b = writeBatch(db); b.set(retRef(db, "20111111111", 60), ret("CON", "20111111111", 60));
+  b.set(doc(db, "retenciones_archivos", "20111111111_20_R001-60"), { xml: "<Retention/>", subidoPorUid: "CON", subidoEn: serverTimestamp() }); return b.commit(); });
+await caso("NO sube una retención con un ID que no cuadra", false, () => setDoc(doc(db, "retenciones", "20111111111_20_R001-999"), ret("CON", "20111111111", 61)));
+await caso("NO agrega campos extra a una retención", false, () => setDoc(retRef(db, "20111111111", 62), ret("CON", "20111111111", 62, { otro: 1 })));
+await caso("completa un pago con su retención", true, () => updateDoc(doc(db, "pagos", "A1"), { bruto: 103.09, retencion: 3.09 }));
+await caso("borra una retención", true, () => deleteDoc(retRef(db, "20111111111", 60)));
 await caso("borra sus archivos", true, () => deleteDoc(doc(db, "comprobantes_archivos", "20222222222_01_F001-60")));
 await caso("NO se sube a admin", false, () => updateDoc(doc(db, "usuarios", "CON"), { rol: "admin" }));
 

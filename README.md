@@ -125,6 +125,13 @@ XML es `F00046937` en el TXT. **Excel (formato Gosocket)** descarga lo filtrado 
 (con "Pagado" y "Fecha Pago" llenos). Todo se lee en el navegador: no necesita plan Blaze. Tras publicar esta
 parte, publica también `reglas` (reglas e índices nuevos).
 
+## Retenciones
+
+Pestaña **Retenciones**: Contabilidad sube los XML de los comprobantes de retención que emite el hotel (y su PDF
+con el mismo nombre), un ZIP o la carpeta completa. Cada proveedor ve y descarga los suyos (PDF y XML). Al
+guardarlos, cada pago del TXT que cuadra queda con su **bruto** y su **retención** (y si el TXT se carga después,
+también los toma). Publica también `reglas` (reglas e índices nuevos).
+
 ## Probar en local
 ```
 npm run servir      # http://localhost:5000 (con tus valores en public/js/config.js)
