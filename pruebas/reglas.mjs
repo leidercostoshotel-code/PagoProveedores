@@ -110,6 +110,8 @@ await caso("NO cuenta todos", false, () => getAggregateFromServer(collection(db,
 await caso("reemplaza el que él subió", true, () => setDoc(compRef(db, "20111111111", 2), comp("PA", "20111111111", 2, "proveedor")));
 await caso("NO cambia el que registró el hotel", false, () => setDoc(compRef(db, "20111111111", 1), comp("PA", "20111111111", 1, "proveedor")));
 await caso("NO borra comprobantes", false, () => deleteDoc(compRef(db, "20111111111", 2)));
+await caso("NO se pone ACEPTADO por SUNAT él mismo", false, () => setDoc(compRef(db, "20111111111", 14), comp("PA", "20111111111", 14, "proveedor", { estadoSunat: "ACEPTADO" })));
+await caso("NO inventa la validación de SUNAT", false, () => setDoc(compRef(db, "20111111111", 15), comp("PA", "20111111111", 15, "proveedor", { sunatDetalle: "ok", sunatValidadoEn: serverTimestamp() })));
 const archRef = (db, ruc, numero) => doc(db, "comprobantes_archivos", `${ruc}_01_F001-${numero}`);
 const arch = (uid, extra = {}) => ({ xml: "<Invoice/>", subidoPorUid: uid, subidoEn: serverTimestamp(), ...extra });
 await caso("sube el XML y PDF de su comprobante (en el mismo lote)", true, async () => {
@@ -170,6 +172,7 @@ await caso("desactiva un proveedor", true, () => updateDoc(doc(db, "usuarios", "
 await caso("sube un comprobante (XML)", true, () => setDoc(compRef(db, "20222222222", 60), comp("CON", "20222222222", 60, "hotel")));
 await caso("importa uno del Excel de Gosocket", true, () => setDoc(compRef(db, "20222222222", 61), comp("CON", "20222222222", 61, "gosocket", { estadoSunat: "ACEPTADO", gosocketId: "abc" })));
 await caso("actualiza solo el estado SUNAT", true, () => updateDoc(compRef(db, "20222222222", 60), { estadoSunat: "RECHAZADO", gosocketId: "def" }));
+await caso("pide volver a validar con SUNAT", true, () => updateDoc(compRef(db, "20222222222", 60), { estadoSunat: "" }));
 await caso("NO lo marca como subido por el proveedor", false, () => setDoc(compRef(db, "20222222222", 62), comp("CON", "20222222222", 62, "proveedor")));
 await caso("guarda el XML de un comprobante que sube", true, () => setDoc(doc(db, "comprobantes_archivos", "20222222222_01_F001-60"), { xml: "<Invoice/>", subidoPorUid: "CON", subidoEn: serverTimestamp() }));
 await caso("baja cualquier XML", true, () => getDoc(doc(db, "comprobantes_archivos", "20111111111_01_F001-20")));

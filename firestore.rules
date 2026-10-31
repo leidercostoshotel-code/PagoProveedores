@@ -67,13 +67,18 @@ service cloud.firestore {
           'facturaPago', 'fechaEmision', 'fechaVencimiento', 'fechaRecepcion', 'moneda', 'tipoCambio', 'neto', 'exento',
           'impuestos', 'total', 'detraccion', 'rucReceptor', 'receptor', 'refTipo', 'refValor', 'estadoSunat',
           'motivoRechazo', 'gosocketId', 'items', 'origen', 'archivo', 'hash', 'tieneXml', 'tienePdf',
-          'subidoPorUid', 'subidoEn'])
+          'subidoPorUid', 'subidoEn', 'sunatDetalle', 'sunatValidadoEn'])
         && d.ruc is string && d.ruc.matches('[0-9]{11}')
         && d.tipo in ['01', '03', '07', '08'] && d.serie is string && d.numero is int
         && id == d.ruc + '_' + d.tipo + '_' + d.serie + '-' + string(d.numero)
         && d.fechaEmision is string && d.fechaEmision.matches('[0-9]{4}-[0-9]{2}-[0-9]{2}')
         && d.total is number && d.origen in ['proveedor', 'hotel', 'gosocket']
         && d.items is list && d.items.size() <= 300;
+    }
+    // El proveedor no pone el estado SUNAT: lo deja vacío y lo llena la Cloud Function al consultar a SUNAT.
+    function sinEstadoSunat() {
+      let d = request.resource.data;
+      return d.estadoSunat == '' && !('sunatDetalle' in d) && !('sunatValidadoEn' in d);
     }
     function subidoAhora() {
       return request.resource.data.subidoPorUid == request.auth.uid && request.resource.data.subidoEn == request.time;
@@ -84,11 +89,11 @@ service cloud.firestore {
       allow list: if esInterno() || esProveedorDe(resource.data.ruc);
       allow create: if comprobanteOk(id) && subidoAhora()
         && ((gestiona() && request.resource.data.origen in ['hotel', 'gosocket'])
-          || (esProveedorDe(request.resource.data.ruc) && request.resource.data.origen == 'proveedor'));
+          || (esProveedorDe(request.resource.data.ruc) && request.resource.data.origen == 'proveedor' && sinEstadoSunat()));
       allow update: if comprobanteOk(id)
         && (gestiona()
           || (esProveedorDe(resource.data.ruc) && resource.data.origen == 'proveedor'
-              && request.resource.data.origen == 'proveedor' && subidoAhora()));
+              && request.resource.data.origen == 'proveedor' && subidoAhora() && sinEstadoSunat()));
       allow delete: if gestiona();
     }
 

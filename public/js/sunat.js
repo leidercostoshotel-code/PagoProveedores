@@ -240,7 +240,8 @@ export function filaGosocket(c, pago) {
   const g = c.gosocketId;
   const valores = {
     "Id Gosocket": g || c.id, "Id País": c.hash || "", "Fecha de Emisión": c.fechaEmision ? `${ddmmaaaa(c.fechaEmision)}T00:00:00` : "",
-    "Fecha de Recepción": fechaRec, "Estado Entidad Tributaria": c.estadoSunat || "RECIBIDO", "Motivo Rechazo": c.motivoRechazo || "",
+    "Fecha de Recepción": fechaRec, "Estado Entidad Tributaria": !c.estadoSunat || c.estadoSunat === "ERROR" ? "SIN VALIDAR" : c.estadoSunat,
+    "Motivo Rechazo": c.motivoRechazo || (c.estadoSunat !== "ERROR" && c.sunatDetalle) || "",
     "Serie": c.serie, "Correlativo": c.correlativo || String(c.numero), "Número Tipo Documento": String(Number(c.tipo)),
     "Tipo Documento": c.tipoNombre || TIPOS[c.tipo] || "", "Id Emisor": c.ruc, "Nombre Emisor": c.razonSocial,
     "Id Receptor": c.rucReceptor || "", "Nombre Receptor": c.receptor || "",

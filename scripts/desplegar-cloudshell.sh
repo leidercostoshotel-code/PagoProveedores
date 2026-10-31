@@ -10,6 +10,7 @@
 # Configuración del proyecto → "ID del proyecto"), no el nombre del repositorio.
 #
 # Partes: hosting · reglas (Firestore: reglas e índices) · functions (plan Blaze)
+#         sunat (pide las credenciales de API de SUNAT y las guarda como secretos; plan Blaze)
 # Sin partes = hosting + reglas.
 #
 # No toca otros proyectos: todo va con --project, no cambia el proyecto por
@@ -23,11 +24,11 @@ shift || true
 PARTES="${*:-hosting reglas}"
 
 case "$P" in
-  "") echo "⛔ Falta el ID del proyecto: … desplegar-cloudshell.sh ID_PROYECTO [hosting reglas functions]"; exit 1 ;;
+  "") echo "⛔ Falta el ID del proyecto: … desplegar-cloudshell.sh ID_PROYECTO [hosting reglas functions sunat]"; exit 1 ;;
   leitime) echo "⛔ leitime es el proyecto de la suite A-B-Swiss: este portal va en su propio proyecto."; exit 1 ;;
 esac
 for parte in $PARTES; do
-  case "$parte" in hosting|reglas|functions) ;; *) echo "⛔ Parte desconocida: $parte (usa hosting, reglas o functions)"; exit 1 ;; esac
+  case "$parte" in hosting|reglas|functions|sunat) ;; *) echo "⛔ Parte desconocida: $parte (usa hosting, reglas, functions o sunat)"; exit 1 ;; esac
 done
 echo "▶ Proyecto: $P · Partes: $PARTES"
 
@@ -70,6 +71,18 @@ SOLO=""
 [[ " $PARTES " == *" reglas "* ]] && SOLO="${SOLO:+$SOLO,}firestore"
 if [ -n "$SOLO" ]; then
   $FB deploy --only "$SOLO" --project "$P" --non-interactive
+fi
+
+# Credenciales de API de SUNAT (SUNAT Operaciones en Línea → Credenciales de API SUNAT) como secretos de
+# Firebase: se escriben sin verse en pantalla y van por la entrada estándar (no quedan en disco ni en el historial).
+if [[ " $PARTES " == *" sunat "* ]]; then
+  read -rp  "ID de la API de SUNAT (client_id): " SUNAT_ID
+  read -rsp "Clave de la API de SUNAT (client_secret, no se ve al escribir): " SUNAT_CLAVE; echo
+  [ -n "$SUNAT_ID" ] && [ -n "$SUNAT_CLAVE" ] || { echo "⛔ Faltan el ID o la clave."; exit 1; }
+  printf %s "$SUNAT_ID" | $FB functions:secrets:set SUNAT_CLIENT_ID --project "$P" --data-file - --force
+  printf %s "$SUNAT_CLAVE" | $FB functions:secrets:set SUNAT_CLIENT_SECRET --project "$P" --data-file - --force
+  unset SUNAT_ID SUNAT_CLAVE
+  echo "✅ Credenciales de SUNAT guardadas (si las Cloud Functions ya estaban publicadas, vuelve a publicar 'functions')."
 fi
 
 if [[ " $PARTES " == *" functions "* ]]; then

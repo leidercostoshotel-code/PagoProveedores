@@ -125,6 +125,17 @@ XML es `F00046937` en el TXT. **Excel (formato Gosocket)** descarga lo filtrado 
 (con "Pagado" y "Fecha Pago" llenos). Todo se lee en el navegador: no necesita plan Blaze. Tras publicar esta
 parte, publica también `reglas` (reglas e índices nuevos).
 
+## Validación con SUNAT (plan Blaze)
+
+Cada comprobante se consulta en SUNAT (API gratuita de validez de comprobantes) y queda **Aceptado**, **Anulado**,
+**No existe**, etc. (columna SUNAT y Excel); uno que no es válido sale "No pagar". Se hace solo al subirlo, cada 6 horas
+para los pendientes y con el botón **Validar con SUNAT**. Para activarlo:
+
+1. Plan Blaze en el proyecto de Firebase.
+2. Credenciales de API de SUNAT (SUNAT Operaciones en Línea con la Clave SOL del hotel → Empresas → Credenciales de
+   API SUNAT → Registrar) y guardarlas como secretos: `… desplegar-cloudshell.sh ID_PROYECTO sunat` (las pide sin mostrarlas).
+3. Publicar: `… desplegar-cloudshell.sh ID_PROYECTO hosting reglas functions`.
+
 ## Retenciones
 
 Pestaña **Retenciones**: Contabilidad sube los XML de los comprobantes de retención que emite el hotel (y su PDF
