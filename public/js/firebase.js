@@ -29,6 +29,8 @@ const _verificarBloqueoLogin = httpsCallable(functions, "verificarBloqueoLogin")
 const _registrarIntentoFallido = httpsCallable(functions, "registrarIntentoFallido");
 const _limpiarIntentosLogin = httpsCallable(functions, "limpiarIntentosLogin");
 const _restablecerClave = httpsCallable(functions, "restablecerClave");
+/** Validar con SUNAT los comprobantes pendientes (Cloud Function; solo Contabilidad/admin). */
+export const validarSunatAhora = () => httpsCallable(functions, "validarSunatAhora", { timeout: 310000 })({}).then((r) => r.data);
 
 /** "20123456789" → "20123456789@proveedores.hotel"; un correo queda tal cual. */
 export function correoDesdeUsuario(texto) {

@@ -14,12 +14,24 @@
  *    admin/contabilidad activo (contabilidad solo a proveedores). Al personal
  *    lo deja con "debeCambiarClave"; a un proveedor no (su clave puede ser su RUC).
  *
+ * 3) Validación con SUNAT de los comprobantes recibidos (API "consulta integrada de
+ *    validez", gratuita): cada comprobante nuevo con estadoSunat "" se consulta apenas
+ *    se guarda (validarComprobanteSunat); cada 6 horas se revisan los pendientes, los
+ *    que dieron error y los "NO EXISTE" recientes (revisarSunatPendientes); y
+ *    Contabilidad puede pedirlo con un botón (validarSunatAhora). Credenciales en los
+ *    secretos SUNAT_CLIENT_ID / SUNAT_CLIENT_SECRET (scripts/desplegar-cloudshell.sh … sunat).
+ *
  * Si no se despliegan, el portal funciona igual: sin el bloqueo propio (queda
- * el freno de Firebase "too-many-requests") y sin "Restablecer clave".
+ * el freno de Firebase "too-many-requests"), sin "Restablecer clave" y con los
+ * comprobantes "SIN VALIDAR".
  */
 const { onCall, HttpsError } = require("firebase-functions/v2/https");
-const { setGlobalOptions } = require("firebase-functions/v2");
+const { onDocumentWritten } = require("firebase-functions/v2/firestore");
+const { onSchedule } = require("firebase-functions/v2/scheduler");
+const { defineSecret } = require("firebase-functions/params");
+const { setGlobalOptions, logger } = require("firebase-functions/v2");
 const admin = require("firebase-admin");
+const { validarComprobante } = require("./sunat");
 
 admin.initializeApp();
 setGlobalOptions({ region: "us-central1", maxInstances: 10 });
@@ -129,3 +141,77 @@ exports.restablecerClave = onCall({ cors: true }, async (request) => {
   });
   return { ok: true };
 });
+
+/* ══════════════════════════════════════════════════════════════════
+   VALIDACIÓN CON SUNAT DE LOS COMPROBANTES RECIBIDOS
+   ══════════════════════════════════════════════════════════════════ */
+const SUNAT_CLIENT_ID = defineSecret("SUNAT_CLIENT_ID");
+const SUNAT_CLIENT_SECRET = defineSecret("SUNAT_CLIENT_SECRET");
+const RUC_HOTEL = "20297885538";            // el hotel consulta con su propio RUC (igual que en public/js/config.js)
+const DIAS_REINTENTO_NO_EXISTE = 10;        // un comprobante recién emitido puede tardar en llegar a SUNAT
+const credenciales = () => ({ clientId: SUNAT_CLIENT_ID.value(), clientSecret: SUNAT_CLIENT_SECRET.value(), rucConsultante: RUC_HOTEL });
+const espera = (ms) => new Promise((ok) => setTimeout(ok, ms));
+
+/** Consulta uno y guarda el resultado; un error de servicio queda "ERROR" para reintentarse. */
+async function validarYGuardar(ref, c) {
+  const ahora = admin.firestore.FieldValue.serverTimestamp();
+  try {
+    const { estado, detalle } = await validarComprobante(c, credenciales());
+    await ref.update({ estadoSunat: estado, sunatDetalle: detalle, sunatValidadoEn: ahora });
+    return estado;
+  } catch (err) {
+    logger.warn("SUNAT: no se pudo validar", ref.id, err.message);
+    await ref.update({ estadoSunat: "ERROR", sunatDetalle: String(err.message).slice(0, 300), sunatValidadoEn: ahora });
+    if (err.credenciales) throw err;   // credenciales malas: no tiene sentido seguir con los demás
+    return "ERROR";
+  }
+}
+
+// Un comprobante nuevo (o reemplazado, o que alguien mandó "volver a validar") llega con estadoSunat "".
+exports.validarComprobanteSunat = onDocumentWritten(
+  { document: "comprobantes/{id}", secrets: [SUNAT_CLIENT_ID, SUNAT_CLIENT_SECRET], maxInstances: 5 },
+  async (event) => {
+    const despues = event.data?.after;
+    if (!despues?.exists) return;
+    const c = despues.data();
+    if ((c.estadoSunat || "") !== "" || !/^\d{4}-\d{2}-\d{2}$/.test(c.fechaEmision || "")) return;
+    await validarYGuardar(despues.ref, c).catch(() => {});
+  },
+);
+
+/** Revisa los pendientes: sin validar, con error y "NO EXISTE" de los últimos días. Devuelve el resumen. */
+async function revisarPendientes(maximo) {
+  const db = admin.firestore();
+  const snap = await db.collection("comprobantes").where("estadoSunat", "in", ["", "ERROR", "NO EXISTE"]).limit(maximo).get();
+  const limite = new Date(Date.now() - DIAS_REINTENTO_NO_EXISTE * 864e5).toISOString().slice(0, 10);
+  const cuenta = {};
+  for (const d of snap.docs) {
+    const c = d.data();
+    if (c.estadoSunat === "NO EXISTE" && c.fechaEmision < limite) continue;   // ya pasó el plazo: queda como está
+    const estado = await validarYGuardar(d.ref, c);
+    cuenta[estado] = (cuenta[estado] || 0) + 1;
+    await espera(300);   // sin apurar el servicio de SUNAT
+  }
+  return cuenta;
+}
+
+exports.revisarSunatPendientes = onSchedule(
+  { schedule: "every 6 hours", timeZone: "America/Lima", secrets: [SUNAT_CLIENT_ID, SUNAT_CLIENT_SECRET], timeoutSeconds: 540 },
+  async () => { logger.info("SUNAT: revisión programada", await revisarPendientes(400)); },
+);
+
+/** Botón "Validar con SUNAT" (Contabilidad / admin). */
+exports.validarSunatAhora = onCall(
+  { cors: true, secrets: [SUNAT_CLIENT_ID, SUNAT_CLIENT_SECRET], timeoutSeconds: 300 },
+  async (request) => {
+    if (!request.auth) throw new HttpsError("unauthenticated", "Debes iniciar sesión primero.");
+    const q = (await admin.firestore().doc(`usuarios/${request.auth.uid}`).get()).data() || {};
+    if (!q.activo || !["admin", "contabilidad"].includes(q.rol)) throw new HttpsError("permission-denied", "No tienes permiso.");
+    try {
+      return { cuenta: await revisarPendientes(150) };
+    } catch (err) {
+      throw new HttpsError("failed-precondition", err.credenciales
+        ? "SUNAT rechazó las credenciales de API: revísalas (desplegar-cloudshell.sh … sunat)." : err.message);
+    }
+  },
+);

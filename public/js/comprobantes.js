@@ -13,10 +13,10 @@
    ══════════════════════════════════════════════════════════════════ */
 import { db } from "./firebase.js";
 import {
-  collection, query, where, orderBy, getDocs, getDoc, doc, writeBatch, serverTimestamp,
+  collection, query, where, orderBy, getDocs, getDoc, doc, updateDoc, writeBatch, serverTimestamp,
 } from "https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore.js";
 import {
-  $, esc, icono, monto, fechaCorta, hoyISO, abrirModal, confirmar, notificar, paginador, archivosSoltados,
+  $, esc, icono, monto, fechaCorta, fechaHora, hoyISO, abrirModal, confirmar, notificar, paginador, archivosSoltados,
 } from "./util.js";
 import { puedeGestionar } from "./roles.js";
 import { huellaArchivo } from "./bcp.js";
@@ -25,6 +25,7 @@ import { TIPOS, leerXmlSunat, leerRetencion, leerNumero, facturaPagoDe, filasGos
 import { constancia } from "./vista-proveedor.js";
 import { paginaServidor } from "./paginaServidor.js";
 import { RUC_HOTEL } from "./config.js";
+import { validarSunatAhora } from "./firebase.js";
 
 const colComp = () => collection(db, "comprobantes");
 const refArchivos = (id) => doc(db, "comprobantes_archivos", id);
@@ -39,9 +40,18 @@ const ESTADOS_CARGA = {
 const chip = (clase, texto) => `<span class="etiqueta-estado ${clase}">${esc(texto)}</span>`;
 
 /** Estado de pago de un comprobante (cruce con los TXT del banco). */
+const NO_VALIDOS = ["RECHAZADO", "ANULADO", "NO EXISTE", "NO AUTORIZADO"];
+/** Estado en SUNAT: el de la consulta del portal (Cloud Function) o el que trajo el Excel de Gosocket. */
+function chipSunat(c) {
+  const e = c.estadoSunat || "";
+  if (["ACEPTADO", "AUTORIZADO"].includes(e)) return chip("activo", e === "ACEPTADO" ? "Aceptado" : "Autorizado");
+  if (NO_VALIDOS.includes(e)) return chip("inactivo", { "NO EXISTE": "No existe en SUNAT", "NO AUTORIZADO": "No autorizado" }[e] || e[0] + e.slice(1).toLowerCase());
+  return chip("neutro", "Sin validar");
+}
+const textoSunat = (c) => (!c.estadoSunat || c.estadoSunat === "ERROR" ? "SIN VALIDAR" : c.estadoSunat);
+
 function chipPago(c, pago) {
-  if (c.estadoSunat === "RECHAZADO") return chip("inactivo", "Rechazado SUNAT");
-  if (c.estadoSunat === "ANULADO") return chip("inactivo", "Anulado");
+  if (!pago && NO_VALIDOS.includes(c.estadoSunat)) return chip("inactivo", "No pagar");
   if (c.tipo === "07") return chip("neutro", "Nota de crédito");
   return pago ? chip("activo", `Pagado ${fechaCorta(pago.fechaPago)}`) : chip("pendiente", "Pendiente de pago");
 }
@@ -176,7 +186,10 @@ export function vistaComprobantes(cont, ctx, { proveedor = false } = {}) {
     <div class="panel">
       <div class="panel-titulo">
         <div><h2>${proveedor ? "Mis comprobantes" : "Comprobantes recibidos"}</h2><p id="desc-comp">Toca un comprobante para ver su detalle.</p></div>
-        <div class="acciones"><button type="button" class="btn chico" id="excel-comp">${icono("bajar")}Excel (formato Gosocket)</button></div>
+        <div class="acciones">
+          ${gestiona ? `<button type="button" class="btn chico" id="sunat-comp" title="Consulta a SUNAT los comprobantes sin validar">${icono("escudo")}Validar con SUNAT</button>` : ""}
+          <button type="button" class="btn chico" id="excel-comp">${icono("bajar")}Excel (formato Gosocket)</button>
+        </div>
       </div>
       <form class="barra-filtros" id="filtros-comp">
         <label class="campo"><span>Emitido desde</span><input class="input chico" type="date" id="fc-desde"></label>
@@ -190,8 +203,8 @@ export function vistaComprobantes(cont, ctx, { proveedor = false } = {}) {
       <p class="error" id="fc-error" hidden></p>
       <div class="tabla-caja"><table>
         <thead><tr><th>Emisión</th>${proveedor ? "" : "<th>RUC</th><th>Emisor</th>"}<th>Comprobante</th><th>Tipo</th>
-          <th class="num">Total</th><th>Vence</th><th>Pago</th><th>Origen</th><th>Archivos</th></tr></thead>
-        <tbody id="tb-comp"><tr><td colspan="10" class="vacio">Cargando…</td></tr></tbody>
+          <th class="num">Total</th><th>Vence</th><th>SUNAT</th><th>Pago</th><th>Origen</th><th>Archivos</th></tr></thead>
+        <tbody id="tb-comp"><tr><td colspan="11" class="vacio">Cargando…</td></tr></tbody>
       </table></div>
       <div id="pag-comp"></div>
     </div>`;
@@ -227,13 +240,13 @@ export function vistaComprobantes(cont, ctx, { proveedor = false } = {}) {
         ${proveedor ? "" : `<td class="mono">${esc(c.ruc)}</td><td>${esc(c.razonSocial)}</td>`}
         <td class="mono">${esc(c.comprobante)}</td><td>${esc(c.tipoNombre || TIPOS[c.tipo] || c.tipo)}</td>
         <td class="num neto">${monto(c.total, c.moneda)}</td><td>${c.fechaVencimiento ? fechaCorta(c.fechaVencimiento) : "—"}</td>
-        <td>${chipPago(c, pagoDe(mapaPagos, c))}</td><td style="font-size:11px">${textoOrigen(c, proveedor)}</td>
+        <td>${chipSunat(c)}</td><td>${chipPago(c, pagoDe(mapaPagos, c))}</td><td style="font-size:11px">${textoOrigen(c, proveedor)}</td>
         <td><div class="acciones">${botonesArchivo(c, i, proveedor)}</div></td>
-      </tr>`).join("") || `<tr><td colspan="10" class="vacio">${proveedor ? "Aún no has enviado comprobantes con estos filtros." : "No hay comprobantes con estos filtros."}</td></tr>`;
+      </tr>`).join("") || `<tr><td colspan="11" class="vacio">${proveedor ? "Aún no has enviado comprobantes con estos filtros." : "No hay comprobantes con estos filtros."}</td></tr>`;
     },
     alError: (err) => {
       console.error("Portal: no se pudieron leer los comprobantes", err);
-      $("#tb-comp", cont).innerHTML = `<tr><td colspan="10" class="vacio">No se pudieron cargar los comprobantes (${esc(err.code || err.message)}).</td></tr>`;
+      $("#tb-comp", cont).innerHTML = `<tr><td colspan="11" class="vacio">No se pudieron cargar los comprobantes (${esc(err.code || err.message)}).</td></tr>`;
     },
   });
   function buscar() {
@@ -254,6 +267,22 @@ export function vistaComprobantes(cont, ctx, { proveedor = false } = {}) {
   $("#tb-comp", cont).addEventListener("keydown", (e) => { if (e.key === "Enter" && e.target.matches("tr[data-i]")) e.target.click(); });
 
   // Excel con las MISMAS columnas que exporta Gosocket (+ Pagado / Fecha Pago del cruce con los TXT).
+  $("#sunat-comp", cont)?.addEventListener("click", async (e) => {
+    const b = e.currentTarget;
+    b.disabled = true;
+    notificar("Consultando a SUNAT…");
+    try {
+      const { cuenta = {} } = await validarSunatAhora();
+      const total = Object.values(cuenta).reduce((a, n) => a + n, 0);
+      notificar(total ? `SUNAT: ${Object.entries(cuenta).map(([k, n]) => `${n} ${k.toLowerCase()}`).join(" · ")}` : "No hay comprobantes por validar");
+      ps.recargar();
+    } catch (err) {
+      console.error("Portal: no se pudo validar con SUNAT", err);
+      notificar(err.code === "functions/not-found" || err.code === "functions/internal"
+        ? "La validación con SUNAT aún no está activa (falta publicar las Cloud Functions)" : err.message || "No se pudo validar con SUNAT", "error");
+    } finally { b.disabled = false; }
+  });
+
   $("#excel-comp", cont).addEventListener("click", async () => {
     if (!actual) return;
     const total = ps.estado.total;
@@ -301,7 +330,8 @@ function detalle(c, pago, { proveedor, gestiona, alBorrar }) {
       <dt>IGV</dt><dd class="mono">${monto(c.impuestos, c.moneda)}</dd>
       ${c.detraccion ? `<dt>Detracción</dt><dd class="mono descuento">${monto(c.detraccion, c.moneda)}</dd>` : ""}
       ${c.refValor ? `<dt>Documento que modifica</dt><dd class="mono">${esc(c.refValor)}</dd>` : ""}
-      ${c.estadoSunat ? `<dt>Estado SUNAT (Gosocket)</dt><dd>${esc(c.estadoSunat)}${c.motivoRechazo ? ` · ${esc(c.motivoRechazo)}` : ""}</dd>` : ""}
+      <dt>Estado en SUNAT</dt><dd>${chipSunat(c)}${c.sunatValidadoEn?.toDate ? ` <span class="ayuda">consultado el ${esc(fechaHora(c.sunatValidadoEn))}</span>` : c.gosocketId && c.estadoSunat ? ` <span class="ayuda">según Gosocket</span>` : ""}</dd>
+      ${c.motivoRechazo || c.sunatDetalle ? `<dt>Observación SUNAT</dt><dd>${esc(c.motivoRechazo || c.sunatDetalle)}</dd>` : ""}
       <dt>Pago</dt><dd>${chipPago(c, pago)}</dd>
     </dl>
     <div class="total"><span>Importe total</span><span class="mono">${monto(c.total, c.moneda)}</span></div></div>
@@ -311,7 +341,8 @@ function detalle(c, pago, { proveedor, gestiona, alBorrar }) {
         <td class="num">${monto(it.valorUnitario, c.moneda)}</td><td class="num">${monto(it.valorVenta, c.moneda)}</td></tr>`).join("")}</tbody>
     </table></div>` : `<p class="ayuda">${c.origen === "gosocket" ? "Importado del Excel de Gosocket: sin el detalle de ítems (sube el XML para verlo)." : "El comprobante no trae ítems."}</p>`}
     <div class="modal-pie">
-      ${gestiona ? `<button type="button" class="btn rojo" data-borrar>Eliminar</button>` : ""}
+      ${gestiona ? `<button type="button" class="btn rojo" data-borrar>Eliminar</button>
+        <button type="button" class="btn" data-revalidar title="Vuelve a consultar este comprobante en SUNAT">${icono("escudo")}Volver a validar</button>` : ""}
       ${!proveedor && c.gosocketId ? `<a class="btn" href="${esc(enlaceGosocket(c.gosocketId, "ver"))}" target="_blank" rel="noopener noreferrer">Abrir en Gosocket</a>` : ""}
       ${pago ? `<button type="button" class="btn" data-constancia>${icono("recibo")}Constancia de pago</button>` : ""}
       ${botonesArchivo(c, 0, proveedor)}
@@ -319,6 +350,10 @@ function detalle(c, pago, { proveedor, gestiona, alBorrar }) {
     </div>`, { ancho: true });
   el.querySelector("[data-constancia]")?.addEventListener("click", () => { cerrar(); constancia(pago); });
   el.querySelectorAll("[data-bajar]").forEach((b) => b.addEventListener("click", () => { if (b.dataset.bajar === "pdf" && (!c.tieneXml || !c.tienePdf)) cerrar(); bajarArchivo(c, b.dataset.bajar, { proveedor }); }));
+  el.querySelector("[data-revalidar]")?.addEventListener("click", async () => {
+    try { await updateDoc(doc(db, "comprobantes", c.id), { estadoSunat: "" }); cerrar(); notificar("Se volverá a consultar en SUNAT en unos segundos"); alBorrar(); }
+    catch (err) { console.error("Portal: no se pudo pedir la validación", err); notificar("No se pudo pedir la validación", "error"); }
+  });
   el.querySelector("[data-borrar]")?.addEventListener("click", async () => {
     if (!(await confirmar({ titulo: "Eliminar comprobante", textoOk: "Eliminar", peligroso: true,
       mensaje: `Se eliminará ${c.comprobante} de ${c.razonSocial} del portal (no de SUNAT ni de Gosocket).` }))) return;
@@ -463,7 +498,7 @@ export function montarCarga(cont, ctx, { proveedor = false, alGuardar, modo = "c
         if (ya.hash && ya.hash === x.hash && (ya.tieneXml || !x.xmlTexto) && (ya.tienePdf || !x.pdf)) { x.estado = "igual"; return; }
         if (proveedor && ya.origen !== "proveedor") { Object.assign(x, { estado: "igual", motivo: "Ya lo registró el hotel." }); return; }
         // El XML reemplaza los datos, pero conserva lo que vino de Gosocket (estado SUNAT y enlace).
-        if (modo === "comprobantes") Object.assign(x.doc, { estadoSunat: ya.estadoSunat || "", motivoRechazo: ya.motivoRechazo || "", gosocketId: ya.gosocketId || "", ...(ya.fechaRecepcion ? { fechaRecepcion: ya.fechaRecepcion } : {}) });
+        if (modo === "comprobantes") Object.assign(x.doc, { estadoSunat: ya.gosocketId ? ya.estadoSunat || "" : "", motivoRechazo: ya.motivoRechazo || "", gosocketId: ya.gosocketId || "", ...(ya.fechaRecepcion ? { fechaRecepcion: ya.fechaRecepcion } : {}) });
         x.estado = "cambio";
       });
     }

@@ -57,8 +57,16 @@ del hotel administra todo desde el mismo portal. Login y estilo copiados de la s
   depender de prefijos), lector del Excel de Gosocket y la fila de descarga. `public/js/zip.js` — leer ZIP/XLSX
   (DecompressionStream) y escribir XLSX sin librerías (la CSP solo deja scripts propios y de gstatic).
 - `functions/index.js` — `verificarBloqueoLogin`, `registrarIntentoFallido`, `limpiarIntentosLogin`, `restablecerClave` (plan Blaze, opcionales).
+  **Validación con SUNAT** (`functions/sunat.js`, API gratuita "consulta integrada de validez", secretos
+  `SUNAT_CLIENT_ID` / `SUNAT_CLIENT_SECRET` que pone `desplegar-cloudshell.sh … sunat`): `validarComprobanteSunat`
+  (al escribirse un comprobante con `estadoSunat` "") consulta y guarda `estadoSunat` (ACEPTADO, ANULADO, NO EXISTE,
+  AUTORIZADO, NO AUTORIZADO; "ERROR" si falló el servicio), `sunatDetalle` y `sunatValidadoEn`;
+  `revisarSunatPendientes` (cada 6 h) reintenta "", ERROR y NO EXISTE de los últimos 10 días; `validarSunatAhora`
+  (botón "Validar con SUNAT", Contabilidad/admin). El hotel consulta con su RUC. Para volver a validar uno basta
+  poner `estadoSunat: ""` (botón en el detalle). Al reemplazar un XML se vuelve a validar (salvo estado de Gosocket).
+  El proveedor no puede escribir el estado (`sinEstadoSunat()` en las reglas).
 - `firestore.rules` — roles con perfil en `usuarios/{uid}`; proveedor solo lee `pagos` con su `ruc`.
-- `pruebas/reglas.mjs` — 100 pruebas de seguridad de las reglas (lo que intentaría alguien con F12 en cada rol);
+- `pruebas/reglas.mjs` — 103 pruebas de seguridad de las reglas (lo que intentaría alguien con F12 en cada rol);
   `npm install && npm run probar:reglas` (emulador, necesita Java). **Correrlas tras tocar `firestore.rules`.**
 - `firebase.json` — cabeceras de seguridad (CSP: scripts solo propios y de gstatic, datos solo a Google;
   sin iframes ajenos; HSTS). Un script o servicio externo nuevo hay que sumarlo a la CSP.
@@ -83,7 +91,7 @@ del hotel administra todo desde el mismo portal. Login y estilo copiados de la s
   numero, correlativo, comprobante, facturaPago, fechaEmision, fechaVencimiento, fechaRecepcion, moneda, tipoCambio,
   neto, exento, impuestos, total, detraccion, rucReceptor, receptor, refTipo, refValor, estadoSunat, motivoRechazo,
   gosocketId, items[≤300], origen (proveedor|hotel|gosocket), archivo, hash, tieneXml, tienePdf, subidoPorUid,
-  subidoEn. `comprobantes_archivos/{id}`: xml (texto), pdf (base64, opcional), subidoPorUid, subidoEn: se lee de a uno
+  subidoEn, sunatDetalle, sunatValidadoEn (estos dos y estadoSunat ≠ "" solo los pone la Cloud Function o Gosocket). `comprobantes_archivos/{id}`: xml (texto), pdf (base64, opcional), subidoPorUid, subidoEn: se lee de a uno
   (get por prefijo de RUC), nadie lista; lo escribe quien puede escribir su comprobante (getAfter en el lote). Reglas: el
   proveedor lee por ID solo si empieza con su RUC (así sabe si ya existe), crea con origen "proveedor" y solo
   cambia los que él subió; Contabilidad/admin todo; consulta solo lee (`hasOnly` de campos y el ID debe cuadrar).
