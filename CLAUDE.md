@@ -76,6 +76,19 @@ del hotel administra todo desde el mismo portal. Login y estilo copiados de la s
   activo = activo en SAP. Desde el navegador NO se pueden crear miles (Firebase limita ~100 altas/hora
   por IP), por eso va por el API de administrador con `gcloud auth print-access-token`. Re-ejecutable.
 - `scripts/desplegar-cloudshell.sh` — despliegue desde Google Cloud Shell (una línea; nunca con `leitime`).
+  Partes: hosting · reglas · functions · sunat (secretos de SUNAT) · llave-respaldo (cuenta de SOLO LECTURA
+  `respaldo-servidor@…`, rol Cloud Datastore Viewer, y su llave para el servidor) · copias (copias de seguridad
+  diarias de Firestore dentro de Google, 14 semanas; plan Blaze).
+- `respaldo-windows/` — **respaldo diario en el servidor Windows del hotel** (pedido del dueño: nunca se borra).
+  `instalar.ps1` (PowerShell 5.1, sin tildes a propósito, CRLF; `irm …/instalar.ps1 | iex` o `instalar.bat`): instala
+  Node.js 22 si falta, copia el programa a `C:\ProgramData\PortalProveedoresRespaldo` (ACL solo SYSTEM/Administradores
+  por SID), crea la tarea programada diaria (SYSTEM, StartWhenAvailable) y hace el primer respaldo. `respaldo.mjs`
+  (Node sin dependencias; `comun.mjs` firma el JWT de la cuenta de servicio y usa la API REST de Firestore):
+  `datos\<fecha>\<colección>.jsonl.gz` (documentos con sus tipos, para restaurar), `excel\*.xlsx` (lo más
+  reciente), `archivos\<tipo>\<RUC razón>\<AAAA-MM>\` XML/PDF (solo los que faltan; versión nueva aparte;
+  `archivos\indice.json`) y `registro.log`. `restaurar.mjs` vuelve a escribir un respaldo (y los XML/PDF) en un
+  proyecto con una llave de escritura. Con `FIRESTORE_EMULATOR_HOST` funciona contra el emulador (así se probó).
+  Una colección nueva del portal se suma a `COLECCIONES` (y a `EXCEL`) en respaldo.mjs y restaurar.mjs.
 - `.github/workflows/firebase-deploy.yml` — despliega Hosting, Firestore y Functions con secrets `FIREBASE_*`.
 
 ## Modelo de datos

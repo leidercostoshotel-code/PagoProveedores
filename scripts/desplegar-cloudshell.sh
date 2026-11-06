@@ -11,6 +11,8 @@
 #
 # Partes: hosting · reglas (Firestore: reglas e índices) · functions (plan Blaze)
 #         sunat (pide las credenciales de API de SUNAT y las guarda como secretos; plan Blaze)
+#         llave-respaldo (cuenta de SOLO LECTURA y su llave para el respaldo en el servidor del hotel)
+#         copias (copias de seguridad diarias de Firestore dentro de Google, 14 semanas; plan Blaze)
 # Sin partes = hosting + reglas.
 #
 # No toca otros proyectos: todo va con --project, no cambia el proyecto por
@@ -28,7 +30,7 @@ case "$P" in
   leitime) echo "⛔ leitime es el proyecto de la suite A-B-Swiss: este portal va en su propio proyecto."; exit 1 ;;
 esac
 for parte in $PARTES; do
-  case "$parte" in hosting|reglas|functions|sunat) ;; *) echo "⛔ Parte desconocida: $parte (usa hosting, reglas, functions o sunat)"; exit 1 ;; esac
+  case "$parte" in hosting|reglas|functions|sunat|llave-respaldo|copias) ;; *) echo "⛔ Parte desconocida: $parte (usa hosting, reglas, functions, sunat, llave-respaldo o copias)"; exit 1 ;; esac
 done
 echo "▶ Proyecto: $P · Partes: $PARTES"
 
@@ -83,6 +85,32 @@ if [[ " $PARTES " == *" sunat "* ]]; then
   printf %s "$SUNAT_CLAVE" | $FB functions:secrets:set SUNAT_CLIENT_SECRET --project "$P" --data-file - --force
   unset SUNAT_ID SUNAT_CLAVE
   echo "✅ Credenciales de SUNAT guardadas (si las Cloud Functions ya estaban publicadas, vuelve a publicar 'functions')."
+fi
+
+# Llave de SOLO LECTURA para el respaldo en el servidor del hotel (respaldo-windows/instalar.ps1).
+# Rol "Cloud Datastore Viewer": puede leer la base pero no cambiar ni borrar nada.
+if [[ " $PARTES " == *" llave-respaldo "* ]]; then
+  SA="respaldo-servidor@$P.iam.gserviceaccount.com"
+  gcloud services enable iam.googleapis.com --project "$P" >/dev/null
+  gcloud iam service-accounts describe "$SA" --project "$P" >/dev/null 2>&1 \
+    || gcloud iam service-accounts create respaldo-servidor --project "$P" --display-name "Respaldo en el servidor del hotel (solo lectura)"
+  gcloud projects add-iam-policy-binding "$P" --member "serviceAccount:$SA" --role roles/datastore.viewer --condition=None >/dev/null
+  LL="$HOME/llave-respaldo-portal.json"
+  gcloud iam service-accounts keys create "$LL" --iam-account "$SA" --project "$P"
+  echo "✅ Llave de solo lectura creada: $LL"
+  cloudshell download "$LL" 2>/dev/null || echo "   Descárgala con el menú ⋮ de Cloud Shell → Descargar → $LL"
+  echo "   Cuando ya esté en el servidor, bórrala de Cloud Shell:  rm $LL"
+fi
+
+# Copias de seguridad de Firestore dentro de Google (diarias, se guardan 14 semanas). Plan Blaze.
+if [[ " $PARTES " == *" copias "* ]]; then
+  if gcloud firestore backups schedules list --database="(default)" --project "$P" --format="value(name)" 2>/dev/null | grep -q .; then
+    echo "✅ Ya hay copias de seguridad programadas:"
+    gcloud firestore backups schedules list --database="(default)" --project "$P"
+  else
+    gcloud firestore backups schedules create --database="(default)" --recurrence=daily --retention=14w --project "$P"
+    echo "✅ Copias de seguridad diarias de Firestore programadas (se guardan 14 semanas)."
+  fi
 fi
 
 if [[ " $PARTES " == *" functions "* ]]; then

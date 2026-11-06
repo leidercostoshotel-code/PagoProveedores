@@ -1,0 +1,3 @@
+# Archivos de Windows: se guardan con CRLF tal cual.
+respaldo-windows/*.bat -text
+respaldo-windows/*.ps1 -text
