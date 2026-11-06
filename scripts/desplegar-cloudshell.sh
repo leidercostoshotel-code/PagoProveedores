@@ -94,9 +94,14 @@ if [[ " $PARTES " == *" llave-respaldo "* ]]; then
   gcloud services enable iam.googleapis.com --project "$P" >/dev/null
   gcloud iam service-accounts describe "$SA" --project "$P" >/dev/null 2>&1 \
     || gcloud iam service-accounts create respaldo-servidor --project "$P" --display-name "Respaldo en el servidor del hotel (solo lectura)"
-  gcloud projects add-iam-policy-binding "$P" --member "serviceAccount:$SA" --role roles/datastore.viewer --condition=None >/dev/null
+  # Una cuenta recién creada tarda unos segundos en "existir" para los permisos: se reintenta.
+  reintentar() { for i in 1 2 3 4 5 6 7 8 9 10 11 12; do "$@" && return 0; echo "   …esperando a que Google registre la cuenta ($i/12)" >&2; sleep 10; done; return 1; }
+  reintentar gcloud projects add-iam-policy-binding "$P" --member "serviceAccount:$SA" --role roles/datastore.viewer --condition=None --quiet >/dev/null \
+    || { echo "⛔ No se pudo dar el permiso de lectura a $SA."; exit 1; }
+  echo "✅ Permiso de solo lectura (Cloud Datastore Viewer) dado a $SA"
   LL="$HOME/llave-respaldo-portal.json"
-  gcloud iam service-accounts keys create "$LL" --iam-account "$SA" --project "$P"
+  reintentar gcloud iam service-accounts keys create "$LL" --iam-account "$SA" --project "$P" \
+    || { echo "⛔ No se pudo crear la llave."; exit 1; }
   echo "✅ Llave de solo lectura creada: $LL"
   cloudshell download "$LL" 2>/dev/null || echo "   Descárgala con el menú ⋮ de Cloud Shell → Descargar → $LL"
   echo "   Cuando ya esté en el servidor, bórrala de Cloud Shell:  rm $LL"
