@@ -136,6 +136,12 @@ para los pendientes y con el botón **Validar con SUNAT**. Para activarlo:
    API SUNAT → Registrar) y guardarlas como secretos: `… desplegar-cloudshell.sh ID_PROYECTO sunat` (las pide sin mostrarlas).
 3. Publicar: `… desplegar-cloudshell.sh ID_PROYECTO hosting reglas functions`.
 
+## Respaldo en el servidor del hotel
+
+Copia diaria automática de todo el portal (datos, Excel y los XML/PDF) en el servidor Windows del hotel, que
+nunca se borra, más la forma de restaurarla: ver [respaldo-windows/README.md](respaldo-windows/README.md).
+Además, `desplegar-cloudshell.sh … copias` activa las copias de seguridad diarias de Firestore dentro de Google.
+
 ## Retenciones
 
 Pestaña **Retenciones**: Contabilidad sube los XML de los comprobantes de retención que emite el hotel (y su PDF
