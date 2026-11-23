@@ -1,6 +1,6 @@
 /* ══════════════════════════════════════════════════════════════════
    ADMINISTRACIÓN (personal del hotel: admin / contabilidad / consulta)
-   Pestañas: Pagos · Comprobantes · Retenciones · Cargar lote · Lotes · Proveedores · Usuarios.
+   Pestañas: Pagos · Comprobantes · Retenciones · Por pagar · Cargar lote · Lotes · Proveedores · Usuarios.
    Lo que cada rol puede hacer lo decide de verdad firestore.rules; aquí
    solo se esconden los botones que no le corresponden.
    ══════════════════════════════════════════════════════════════════ */
@@ -21,12 +21,14 @@ import { paginaServidor } from "./paginaServidor.js";
 import { vistaComprobantes } from "./comprobantes.js";
 import { vistaRetenciones, aplicarRetencionesAPagos } from "./retenciones.js";
 import { DOMINIO_PROVEEDORES } from "./config.js";
+import { vistaPorPagarAdmin } from "./porpagar.js";
 
 export function pestanas(rol) {
   return [
     { id: "pagos", texto: "Pagos", icono: "recibo" },
     { id: "comprobantes", texto: "Comprobantes", icono: "archivo" },
     { id: "retenciones", texto: "Retenciones", icono: "recibo" },
+    { id: "porpagar", texto: "Por pagar", icono: "billetera" },
     ...(puedeGestionar(rol) ? [{ id: "cargar", texto: "Cargar lotes", icono: "subir" }] : []),
     { id: "lotes", texto: "Lotes", icono: "capas" },
     { id: "proveedores", texto: "Proveedores", icono: "edificio" },
@@ -35,7 +37,7 @@ export function pestanas(rol) {
 }
 
 export function montar(id, cont, ctx) {
-  const vistas = { pagos: vistaPagos, comprobantes: vistaComprobantes, retenciones: vistaRetenciones, cargar: vistaCargar, lotes: vistaLotes, proveedores: vistaProveedores, usuarios: vistaUsuarios };
+  const vistas = { pagos: vistaPagos, comprobantes: vistaComprobantes, retenciones: vistaRetenciones, porpagar: vistaPorPagarAdmin, cargar: vistaCargar, lotes: vistaLotes, proveedores: vistaProveedores, usuarios: vistaUsuarios };
   return vistas[id](cont, ctx);
 }
 

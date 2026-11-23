@@ -27,7 +27,7 @@ if (!carpeta || !proyecto || (!rutaLlave && !process.env.FIRESTORE_EMULATOR_HOST
 }
 const api = cliente(process.env.FIRESTORE_EMULATOR_HOST ? null : leerLlave(rutaLlave));
 const raiz = path.resolve(carpeta, "..", "..");   // …\datos\<fecha> → la carpeta del respaldo
-const COLECCIONES = ["usuarios", "pagos", "lotes", "comprobantes", "retenciones"];
+const COLECCIONES = ["usuarios", "pagos", "lotes", "comprobantes", "retenciones", "porpagar"];
 
 const leerLineas = (archivo) => zlib.gunzipSync(fs.readFileSync(archivo)).toString("utf8").split("\n").filter(Boolean).map((l) => JSON.parse(l));
 const nombreEn = (nombre) => nombre.replace(/^projects\/[^/]+\//, `projects/${proyecto}/`);

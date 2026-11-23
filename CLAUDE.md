@@ -53,6 +53,12 @@ del hotel administra todo desde el mismo portal. Login y estilo copiados de la s
 - **Letra del TXT = tipo de documento, no serie:** `facturaPagoDe(tipo, serie, número)` (sunat.js): factura → "F",
   boleta → "B" + número a 8 dígitos ("E001-523" → "F00000523"). Los comprobantes calculan la clave al mostrar
   (`clavePago`), no usan la guardada. `formasFactura` (bcp.js) busca "E001-…" también como "F…".
+- `public/js/porpagar.js` — pestaña **Por pagar** (hotel y proveedor): facturas pendientes según SAP y, si están en
+  una propuesta de pago aprobada de Control de vencimientos (repo liquidacion-visa-sap, botón «Para el portal de
+  proveedores»), la fecha programada. Contabilidad/admin sube el Excel (`interpretarPorPagar`: columnas por nombre;
+  sin NC ni saldos ≤ 0; RUC de 11 dígitos) y **Publicar** reemplaza todo: escribe `porpagar/{RUC_FACTURA}` y borra los
+  ids de la carga anterior que ya no están (`porpagar_cargas/actual.ids`, sin listar la colección). El proveedor ve
+  KPIs (saldo por moneda con `agregar`, próximo pago desde hoy) y su lista paginada por vencimiento.
 - `public/js/sunat.js` — lector UBL 2.1 (Invoice 01/03, CreditNote 07, DebitNote 08; por nombre local, sin
   depender de prefijos), lector del Excel de Gosocket y la fila de descarga. `public/js/zip.js` — leer ZIP/XLSX
   (DecompressionStream) y escribir XLSX sin librerías (la CSP solo deja scripts propios y de gstatic).
@@ -66,7 +72,7 @@ del hotel administra todo desde el mismo portal. Login y estilo copiados de la s
   poner `estadoSunat: ""` (botón en el detalle). Al reemplazar un XML se vuelve a validar (salvo estado de Gosocket).
   El proveedor no puede escribir el estado (`sinEstadoSunat()` en las reglas).
 - `firestore.rules` — roles con perfil en `usuarios/{uid}`; proveedor solo lee `pagos` con su `ruc`.
-- `pruebas/reglas.mjs` — 103 pruebas de seguridad de las reglas (lo que intentaría alguien con F12 en cada rol);
+- `pruebas/reglas.mjs` — 123 pruebas de seguridad de las reglas (lo que intentaría alguien con F12 en cada rol);
   `npm install && npm run probar:reglas` (emulador, necesita Java). **Correrlas tras tocar `firestore.rules`.**
 - `firebase.json` — cabeceras de seguridad (CSP: scripts solo propios y de gstatic, datos solo a Google;
   sin iframes ajenos; HSTS). Un script o servicio externo nuevo hay que sumarlo a la CSP.
@@ -128,6 +134,10 @@ TXT + CSV a la vez (los CSV se juntan en un solo mapa de descuentos). No se dupl
    cambiaron se guardan sin botón ni confirmación (avance archivo por archivo; si uno falla, para y queda
    "Cargar marcados" para reintentar). Un TXT sin facturas o sin fecha de abono NO se guarda solo:
    queda "Revisar" y se puede marcar y cargar a mano.
+- `porpagar/{RUC_FACTURA}`: ruc, razonSocial, factura, numsap, fechaEmision, fechaVencimiento, moneda (PEN|USD), total,
+  saldo, programada (bool), fechaProgramada, montoProgramado, datosAl, cargadoEn. Lee el hotel o el proveedor de ese RUC;
+  escribe Contabilidad/admin (`porPagarOk`: campos fijos, el ID empieza con el RUC). `porpagar_cargas/actual`: archivo,
+  datosAl, documentos, proveedores, programadas, totalPEN, totalUSD, ids, borradas, cargadoPor, cargadoEn (solo el hotel).
 - `intentos_login/{email}`: solo Cloud Functions.
 
 ## Autenticación

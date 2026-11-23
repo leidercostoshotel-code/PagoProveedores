@@ -140,6 +140,30 @@ service cloud.firestore {
       allow delete: if gestiona();
     }
 
+    // Facturas por pagar (ID = RUC_FACTURA): las publica Contabilidad/admin con el archivo de Control de
+    // vencimientos; cada proveedor lee solo las suyas. Cada carga reemplaza la anterior.
+    function porPagarOk(id) {
+      let d = request.resource.data;
+      return d.keys().hasOnly(['ruc', 'razonSocial', 'factura', 'numsap', 'fechaEmision', 'fechaVencimiento',
+          'moneda', 'total', 'saldo', 'programada', 'fechaProgramada', 'montoProgramado', 'datosAl', 'cargadoEn'])
+        && d.ruc is string && d.ruc.matches('[0-9]{11}') && id.split('_')[0] == d.ruc
+        && d.factura is string && d.fechaVencimiento is string && d.moneda in ['PEN', 'USD']
+        && d.saldo is number && d.total is number && d.programada is bool
+        && d.fechaProgramada is string && d.montoProgramado is number
+        && d.cargadoEn == request.time;
+    }
+    match /porpagar/{id} {
+      allow get: if esInterno() || esProveedorDe(id.split('_')[0]);
+      allow list: if esInterno() || esProveedorDe(resource.data.ruc);
+      allow create, update: if gestiona() && porPagarOk(id);
+      allow delete: if gestiona();
+    }
+    // Última carga de «Por pagar» (totales y los ids publicados, para quitar lo que ya no figura).
+    match /porpagar_cargas/{id} {
+      allow read: if esInterno();
+      allow write: if gestiona() && id == 'actual';
+    }
+
     // Bloqueo por intentos fallidos: solo lo tocan las Cloud Functions (Admin SDK).
     match /intentos_login/{email} {
       allow read, write: if false;
