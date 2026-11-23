@@ -235,6 +235,7 @@ td.vacio { padding: 28px; text-align: center; color: var(--gris); }
 .aviso { padding: 10px 12px; border-radius: 4px; font-size: 11.5px; margin-bottom: 12px; border: 1px solid; }
 .aviso.amarillo { background: var(--cinta-soft); border-color: #E5C000; color: #5C4600; }
 .aviso.rojo { background: #FBECEC; border-color: #E8B4B7; color: var(--rojo); }
+.aviso.verde { background: #E1F2EB; border-color: #A9D3C4; color: var(--verde); }
 .aviso.azul { background: #EEF3F9; border-color: var(--linea); color: var(--tinta-soft); }
 .aviso ul { margin: 6px 0 0; padding-left: 18px; }
 .aviso-ok { margin: 12px 0 0; padding: 8px 12px; border-radius: 4px; background: #E1F2EB; color: var(--verde); font-size: 11.5px; font-weight: 700; }

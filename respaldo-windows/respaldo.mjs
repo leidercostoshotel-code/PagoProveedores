@@ -19,7 +19,7 @@ import path from "node:path";
 import zlib from "node:zlib";
 import { leerLlave, cliente, documentos, camposPlanos, idDe, rutaDocs, escribirXlsx } from "./comun.mjs";
 
-const COLECCIONES = ["usuarios", "pagos", "lotes", "comprobantes", "retenciones"];
+const COLECCIONES = ["usuarios", "pagos", "lotes", "comprobantes", "retenciones", "porpagar"];
 const ARCHIVOS = { comprobantes: "comprobantes_archivos", retenciones: "retenciones_archivos" };
 
 const config = JSON.parse(fs.readFileSync(process.argv[2] || path.join(import.meta.dirname, "config.json"), "utf8").replace(/^\uFEFF/, ""));
@@ -41,6 +41,8 @@ const EXCEL = {
     (d) => [d.fechaEmision, d.ruc, d.razonSocial, d.tipoNombre || d.tipo, d.comprobante, d.moneda, d.neto, d.impuestos, d.total, d.fechaVencimiento, d.estadoSunat || "SIN VALIDAR", d.origen]],
   retenciones: [["Emisión", "Retención", "RUC", "Proveedor", "Facturas", "Total pagado", "Retenido", "Moneda"],
     (d) => [d.fechaEmision, d.comprobante, d.ruc, d.razonSocial, (d.documentos || []).map((x) => x.comprobante), d.totalPagado, d.total, d.moneda]],
+  porpagar: [["RUC", "Razón social", "Factura", "Registro SAP", "Emisión", "Vencimiento", "Moneda", "Total", "Saldo", "Programada", "Fecha programada", "Monto programado", "Datos al"],
+    (d) => [d.ruc, d.razonSocial, d.factura, d.numsap, d.fechaEmision, d.fechaVencimiento, d.moneda, d.total, d.saldo, d.programada ? "Sí" : "No", d.fechaProgramada, d.montoProgramado, d.datosAl]],
   usuarios: [["Rol", "RUC", "Razón social / nombre", "Correo", "Activo", "Teléfono"],
     (d) => [d.rol, d.ruc || "", d.razonSocial || d.nombre || "", d.email || "", d.activo ? "Sí" : "No", d.telefono || ""]],
   lotes: [["Lote", "Fecha abono", "Banco", "Facturas", "Proveedores", "Total", "Archivo", "Cargado por"],

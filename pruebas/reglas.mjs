@@ -34,6 +34,9 @@ await env.withSecurityRulesDisabled(async (c) => {
   await setDoc(doc(db, "retenciones", "20222222222_20_R001-2"), { ruc: "20222222222", total: 2 });
   await setDoc(doc(db, "retenciones_archivos", "20111111111_20_R001-1"), { xml: "<Retention/>" });
   await setDoc(doc(db, "retenciones_archivos", "20222222222_20_R001-2"), { xml: "<Retention/>" });
+  await setDoc(doc(db, "porpagar", "20111111111_F001-1"), { ruc: "20111111111", saldo: 100, moneda: "PEN", fechaVencimiento: "2026-12-01" });
+  await setDoc(doc(db, "porpagar", "20222222222_F001-2"), { ruc: "20222222222", saldo: 200, moneda: "PEN", fechaVencimiento: "2026-12-01" });
+  await setDoc(doc(db, "porpagar_cargas", "actual"), { ids: ["20111111111_F001-1", "20222222222_F001-2"] });
 });
 // Comprobante válido (como lo arma public/js/comprobantes.js).
 const comp = (uid, ruc, numero, origen, extra = {}) => ({
@@ -185,6 +188,35 @@ await caso("completa un pago con su retención", true, () => updateDoc(doc(db, "
 await caso("borra una retención", true, () => deleteDoc(retRef(db, "20111111111", 60)));
 await caso("borra sus archivos", true, () => deleteDoc(doc(db, "comprobantes_archivos", "20222222222_01_F001-60")));
 await caso("NO se sube a admin", false, () => updateDoc(doc(db, "usuarios", "CON"), { rol: "admin" }));
+
+console.log("Por pagar");
+const pp = (ruc, factura, extra = {}) => ({ ruc, razonSocial: "X", factura, numsap: "1", fechaEmision: "2026-10-01", fechaVencimiento: "2026-12-01",
+  moneda: "PEN", total: 118, saldo: 118, programada: true, fechaProgramada: "2026-11-28", montoProgramado: 118, datosAl: "2026-11-23", cargadoEn: serverTimestamp(), ...extra });
+const ppDe = (db, ruc) => getDocs(query(collection(db, "porpagar"), where("ruc", "==", ruc)));
+db = as("PA");
+await caso("proveedor lee SUS facturas por pagar", true, () => ppDe(db, "20111111111"));
+await caso("proveedor suma su saldo", true, () => getAggregateFromServer(query(collection(db, "porpagar"), where("ruc", "==", "20111111111")), { s: sum("saldo") }));
+await caso("proveedor lee la suya por ID", true, () => getDoc(doc(db, "porpagar", "20111111111_F001-1")));
+await caso("proveedor NO lee las de B", false, () => ppDe(db, "20222222222"));
+await caso("proveedor NO lee la de B por ID", false, () => getDoc(doc(db, "porpagar", "20222222222_F001-2")));
+await caso("proveedor NO lista todas", false, () => getDocs(collection(db, "porpagar")));
+await caso("proveedor NO se programa un pago", false, () => updateDoc(doc(db, "porpagar", "20111111111_F001-1"), { programada: true }));
+await caso("proveedor NO borra una factura por pagar", false, () => deleteDoc(doc(db, "porpagar", "20111111111_F001-1")));
+await caso("proveedor NO lee la última carga", false, () => getDoc(doc(db, "porpagar_cargas", "actual")));
+db = as("PX");
+await caso("proveedor desactivado NO lee sus facturas por pagar", false, () => ppDe(db, "20333333333"));
+db = as("CSU");
+await caso("consulta lee todas las facturas por pagar", true, () => getDocs(collection(db, "porpagar")));
+await caso("consulta lee la última carga", true, () => getDoc(doc(db, "porpagar_cargas", "actual")));
+await caso("consulta NO publica", false, () => setDoc(doc(db, "porpagar", "20111111111_F009-9"), pp("20111111111", "F009-9")));
+db = as("CON");
+await caso("contabilidad publica una factura por pagar", true, () => setDoc(doc(db, "porpagar", "20111111111_F009-9"), pp("20111111111", "F009-9")));
+await caso("NO publica con un ID de otro RUC", false, () => setDoc(doc(db, "porpagar", "20222222222_F009-9"), pp("20111111111", "F009-9")));
+await caso("NO publica con campos extra", false, () => setDoc(doc(db, "porpagar", "20111111111_F009-8"), pp("20111111111", "F009-8", { cuenta: "123" })));
+await caso("NO publica con otra moneda", false, () => setDoc(doc(db, "porpagar", "20111111111_F009-7"), pp("20111111111", "F009-7", { moneda: "EUR" })));
+await caso("contabilidad quita una factura que ya se pagó", true, () => deleteDoc(doc(db, "porpagar", "20111111111_F009-9")));
+await caso("contabilidad guarda la última carga", true, () => setDoc(doc(db, "porpagar_cargas", "actual"), { ids: [], documentos: 0 }));
+await caso("NO crea otra carga que no sea «actual»", false, () => setDoc(doc(db, "porpagar_cargas", "otra"), { ids: [] }));
 
 console.log("Administrador");
 db = as("ADM");

@@ -1013,6 +1013,70 @@
           "order": "ASCENDING"
         }
       ]
+    },
+    {
+      "collectionGroup": "porpagar",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "ruc",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "fechaVencimiento",
+          "order": "ASCENDING"
+        }
+      ]
+    },
+    {
+      "collectionGroup": "porpagar",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "programada",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "fechaProgramada",
+          "order": "ASCENDING"
+        }
+      ]
+    },
+    {
+      "collectionGroup": "porpagar",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "ruc",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "programada",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "fechaProgramada",
+          "order": "ASCENDING"
+        }
+      ]
+    },
+    {
+      "collectionGroup": "porpagar",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "ruc",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "moneda",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "saldo",
+          "order": "ASCENDING"
+        }
+      ]
     }
   ],
   "fieldOverrides": []

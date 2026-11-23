@@ -149,6 +149,21 @@ con el mismo nombre), un ZIP o la carpeta completa. Cada proveedor ve y descarga
 guardarlos, cada pago del TXT que cuadra queda con su **bruto** y su **retención** (y si el TXT se carga después,
 también los toma). Publica también `reglas` (reglas e índices nuevos).
 
+## Por pagar (facturas pendientes y pagos programados)
+
+Cada proveedor ve en la pestaña **Por pagar** sus facturas registradas en el hotel que aún no se pagan, cuándo
+vencen y, si ya están en una propuesta de pago **aprobada**, la fecha programada (y el monto, si es un pago
+parcial). Así deja de llamar para preguntar "¿cuándo me pagan?".
+
+1. En Control de vencimientos (liquidacion-sap.web.app) → **Programación de pagos** → **«Para el portal de
+   proveedores»**: baja `PorPagar_portal_AAAA-MM-DD.xlsx` con los datos de SAP cargados y las propuestas aprobadas.
+2. En el portal, Contabilidad o admin → **Por pagar** → **Cargar archivo** → revisa la vista previa → **Publicar**.
+   Cada carga **reemplaza** la anterior: lo que ya no figura (porque se pagó) se quita solo. También sirve el
+   Excel de la consulta «Vencimientos proveedores» de SAP, pero sin fechas programadas.
+
+No se publican notas de crédito, saldos a favor, cuentas bancarias ni notas internas. Cuando se abona, la factura
+aparece en «Mis pagos» con el TXT del banco, como siempre.
+
 ## Probar en local
 ```
 npm run servir      # http://localhost:5000 (con tus valores en public/js/config.js)
